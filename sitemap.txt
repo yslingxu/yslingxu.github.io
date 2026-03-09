@@ -1,3 +1,5 @@
+https://tnjlx.github.io/2026/03/09/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%882%EF%BC%89%E5%B8%82%E5%9C%BA/
+https://tnjlx.github.io/2026/03/09/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%881%EF%BC%89%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86/
 https://tnjlx.github.io/2026/03/05/%E9%9A%8F%E7%AC%94/Python-httpx%E5%BA%93%E7%9A%84post%E8%AF%B7%E6%B1%82%E7%9A%84%E5%87%A0%E7%A7%8D%E5%8F%82%E6%95%B0%E7%9A%84%E5%8C%BA%E5%88%AB/
 https://tnjlx.github.io/2026/03/05/%E5%9F%BA%E4%BA%8E%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E7%9A%84%E5%9B%BE%E5%83%8F%E5%A4%84%E7%90%86/%E5%9F%BA%E4%BA%8E%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E7%9A%84%E5%9B%BE%E5%83%8F%E5%A4%84%E7%90%86%EF%BC%884%EF%BC%89%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B/
 https://tnjlx.github.io/2026/03/04/%E5%9F%BA%E4%BA%8E%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E7%9A%84%E5%9B%BE%E5%83%8F%E5%A4%84%E7%90%86/%E5%9F%BA%E4%BA%8E%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E7%9A%84%E5%9B%BE%E5%83%8F%E5%A4%84%E7%90%86%EF%BC%883%EF%BC%89PyTorch/
@@ -28,6 +30,8 @@ https://tnjlx.github.io/tags/%E5%8D%B7%E7%A7%AF%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB
 https://tnjlx.github.io/tags/PyTorch/
 https://tnjlx.github.io/tags/openVPN/
 https://tnjlx.github.io/tags/%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B/
+https://tnjlx.github.io/tags/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/
 https://tnjlx.github.io/categories/%E7%8E%AF%E5%A2%83%E5%BB%BA%E8%AE%BE/
 https://tnjlx.github.io/categories/%E5%9F%BA%E4%BA%8E%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E7%9A%84%E5%9B%BE%E5%83%8F%E5%A4%84%E7%90%86/
 https://tnjlx.github.io/categories/%E9%9A%8F%E7%AC%94/
+https://tnjlx.github.io/categories/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/
