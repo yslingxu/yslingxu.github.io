@@ -1,0 +1,318 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>内存保护机制与绕过 | 凌虚的博客</title><meta name="author" content="凌虚"><meta name="copyright" content="凌虚"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 内存保护机制概述1.1. 漏洞起源冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。 1.2. 内存保护机制 GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出 SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖 DEP（数据执行保护），将数据部分标示为不">
+<meta property="og:type" content="article">
+<meta property="og:title" content="内存保护机制与绕过">
+<meta property="og:url" content="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/index.html">
+<meta property="og:site_name" content="凌虚的博客">
+<meta property="og:description" content="1. 内存保护机制概述1.1. 漏洞起源冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。 1.2. 内存保护机制 GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出 SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖 DEP（数据执行保护），将数据部分标示为不">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yslingxu.github.io/images/avatar.png">
+<meta property="article:published_time" content="2026-04-28T02:33:10.000Z">
+<meta property="article:modified_time" content="2026-04-28T04:31:21.000Z">
+<meta property="article:author" content="凌虚">
+<meta property="article:tag" content="漏洞">
+<meta property="article:tag" content="漏洞挖掘">
+<meta property="article:tag" content="漏洞利用">
+<meta property="article:tag" content="内存保护">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yslingxu.github.io/images/avatar.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "内存保护机制与绕过",
+  "url": "https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/",
+  "image": "https://yslingxu.github.io/images/avatar.png",
+  "datePublished": "2026-04-28T02:33:10.000Z",
+  "dateModified": "2026-04-28T04:31:21.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "凌虚",
+      "url": "https://yslingxu.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '内存保护机制与绕过',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">凌虚的博客</span></a><a class="nav-page-title" href="/"><span class="site-name">内存保护机制与绕过</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">内存保护机制与绕过</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-28T02:33:10.000Z" title="发表于 2026-04-28 10:33:10">2026-04-28</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-28T04:31:21.000Z" title="更新于 2026-04-28 12:31:21">2026-04-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="1-内存保护机制概述"><a href="#1-内存保护机制概述" class="headerlink" title="1. 内存保护机制概述"></a>1. 内存保护机制概述</h1><h2 id="1-1-漏洞起源"><a href="#1-1-漏洞起源" class="headerlink" title="1.1. 漏洞起源"></a>1.1. 漏洞起源</h2><p>冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。</p>
+<h2 id="1-2-内存保护机制"><a href="#1-2-内存保护机制" class="headerlink" title="1.2. 内存保护机制"></a>1.2. 内存保护机制</h2><ul>
+<li>GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出</li>
+<li>SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖</li>
+<li>DEP（数据执行保护），将数据部分标示为不可执行，阻止栈、堆和数据节中攻击代码的执行</li>
+<li>ASLR（加载地址随机），随机化可执行文件和动态链接库文件的加载地址，对抗溢出</li>
+<li>SEHOP（SEH覆写保护），将SEH的保护提升到系统级别，对抗SEH溢出</li>
+<li>在堆中加入了Heap Cookie、Safe Unlinking等一系列的安全机制，对抗堆溢出</li>
+</ul>
+<h2 id="1-3-内存保护机制的对抗"><a href="#1-3-内存保护机制的对抗" class="headerlink" title="1.3. 内存保护机制的对抗"></a>1.3. 内存保护机制的对抗</h2><table>
+<thead>
+<tr>
+<th align="center">目的</th>
+<th align="center">保护技术</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">覆盖返回地址</td>
+<td align="center">通过GS保护</td>
+</tr>
+<tr>
+<td align="center">覆盖SEH链</td>
+<td align="center">通过SafeSEH、SEHOP保护</td>
+</tr>
+<tr>
+<td align="center">覆盖本地变量</td>
+<td align="center">可能被VC编译器经过重新整理和优化</td>
+</tr>
+<tr>
+<td align="center">覆盖空闲堆双向链表</td>
+<td align="center">通过safe unlinking保护</td>
+</tr>
+<tr>
+<td align="center">覆盖堆块头</td>
+<td align="center">XP下使用8位的HeaderCookie进行保护，VISTA之后使用XOR HeaderData</td>
+</tr>
+<tr>
+<td align="center">覆盖lookaside linked list</td>
+<td align="center">Vista之后被移除</td>
+</tr>
+</tbody></table>
+<h1 id="2-GS编译技术"><a href="#2-GS编译技术" class="headerlink" title="2. GS编译技术"></a>2. GS编译技术</h1><h2 id="2-1-原理"><a href="#2-1-原理" class="headerlink" title="2.1. 原理"></a>2.1. 原理</h2><p>在函数开始时，位于EBP之前，向栈帧内压入一个DWORD（称作canary或者Security Cookie）。另外，系统会在.data的内存区域中存放一个Security Cookie的副本。在函数返回之前，系统会比较栈帧和.data中两个Security Cookie的值，如果两者不吻合，说明栈帧中的Security Cookie已被破坏，栈中发生了溢出，系统将进入异常处理流程，函数不会返回。</p>
+<h2 id="2-2-一些机制"><a href="#2-2-一些机制" class="headerlink" title="2.2. 一些机制"></a>2.2. 一些机制</h2><ul>
+<li>系统以.data节的第一个双字作为所有Security Cookie的种子（程序每次运行时种子不同）</li>
+<li>在栈桢初始化以后，用ESP异或种子，来作为当前函数的Security Cookie，增加随机性。在函数返回前，用ESP还原出（异或）Security Cookie的种子</li>
+</ul>
+<h2 id="2-3-弱点：GS保护条件"><a href="#2-3-弱点：GS保护条件" class="headerlink" title="2.3. 弱点：GS保护条件"></a>2.3. 弱点：GS保护条件</h2><p>额外的数据和操作会导致系统性能下降，所以编译器在编译程序的时候，对以下函数并不会应用GS（<code>#pragma strict_gs_check</code>可以对函数强制添加GS保护）：</p>
+<ul>
+<li>函数不包含缓冲区</li>
+<li>函数被定义为具有变量参数列表</li>
+<li>函数使用无保护的关键字标记</li>
+<li>函数在第一个语句中包含内嵌汇编代码</li>
+<li>缓冲区不是8字节类型且大小不大于4个字节</li>
+</ul>
+<h2 id="2-4-变量重排"><a href="#2-4-变量重排" class="headerlink" title="2.4. 变量重排"></a>2.4. 变量重排</h2><p>在VS2005及后续版本，GS选项同时会导致变量重排。编译器在编译时会根据局部变量的类型对变量在栈帧中的位置进行调整，将字符串变量移动到栈帧的高地址（防止字符串溢出时破坏其他的局部变量），将指针参数和字符串参数复制到低地址（防止函数参数被破坏）</p>
+<h2 id="2-5-绕过"><a href="#2-5-绕过" class="headerlink" title="2.5. 绕过"></a>2.5. 绕过</h2><ul>
+<li>由于存在GS保护条件，利用未被保护的函数突破GS</li>
+<li>同时替换栈中和.data中的Cookie突破GS</li>
+<li>GS是在函数返回时对栈进行检查，那么只要在函数返回之前进行控制流劫持即可，例如攻击C++的虚函数或者异常处理</li>
+</ul>
+<h1 id="3-SafeSEH"><a href="#3-SafeSEH" class="headerlink" title="3. SafeSEH"></a>3. SafeSEH</h1><h2 id="3-1-原理"><a href="#3-1-原理" class="headerlink" title="3.1. 原理"></a>3.1. 原理</h2><p>在程序调用异常处理函数前，对要调用的异常处理函数进行一系列的有效性校验，当发现异常处理函数不可靠时将终止异常处理函数的调用。另外，编译器在编译程序的时候将程序所有的异常处理函数地址提取出来，编入一张安全SEH表（安全SEH表的信息在内存中是加密存放的），并将这张表放到程序的映像里面。当程序调用异常处理函数的时 候会将函数地址与安全SEH表进行匹配，检查调用的异常处理函数是否位于安全SEH表中。</p>
+<h2 id="3-2-流程"><a href="#3-2-流程" class="headerlink" title="3.2. 流程"></a>3.2. 流程</h2><p>SafeSEH的功能是在RtlDispatchException函数中实现的：</p>
+<ul>
+<li>检查异常处理链是否位于当前程序的栈中，如果不在当前栈中，程序将终止异常处理函数的调用</li>
+<li>检查异常处理函数指针是否指向当前程序的栈中，如果指向当前栈中，程序将终止异常处理函数的调用</li>
+<li>调用RtlIsValidHandler进行进一步校验</li>
+</ul>
+<h2 id="3-3-允许执行的情况"><a href="#3-3-允许执行的情况" class="headerlink" title="3.3. 允许执行的情况"></a>3.3. 允许执行的情况</h2><ul>
+<li>异常处理函数位于加载模块内存范围之外，DEP关闭</li>
+<li>异常处理函数位于加载模块内存范围之内，相应模块未启用SafeSEH（安全SEH表为空），同时相应模块不是纯IL</li>
+<li>异常处理函数位于加载模块内存范围之内，相应模块启用SafeSEH（安全SEH表不为空），异常处理函数地址包含在安全SEH表中</li>
+</ul>
+<h2 id="3-4-绕过"><a href="#3-4-绕过" class="headerlink" title="3.4. 绕过"></a>3.4. 绕过</h2><ul>
+<li>在加载模块内存范围之外（除了PE和DLL之外的一些Map映射）找到一个跳板指令，转入shellcode执行（不考虑DEP）</li>
+<li>利用未启用SafeSEH模块中的指令作为跳板，转入shellcode执行（所以SafeSEH需要操作系统与编译器的双重支持，在加载模块中找到一个未启用的SafeSEH模块并不难）</li>
+<li>清空安全SEH表，造成该模块未启用SafeSEH的假象</li>
+<li>将注入的指令注册到安全SEH表中</li>
+<li>将shellcode布置到堆区，直接跳转执行</li>
+<li>直接利用未启用SafeSEH的模块（如Adobe Flash Player ActiveX控件）</li>
+<li>攻击返回地址或者C++虚函数</li>
+</ul>
+<h1 id="4-DEP：数据执行保护"><a href="#4-DEP：数据执行保护" class="headerlink" title="4. DEP：数据执行保护"></a>4. DEP：数据执行保护</h1><h2 id="4-1-原理"><a href="#4-1-原理" class="headerlink" title="4.1. 原理"></a>4.1. 原理</h2><p>将数据所在内存页（如默认的堆页、各种堆栈页以及内存池页）标识为不可执行，阻止shellcode执行。根据实现的机制不同可分为软件DEP和硬件DEP：</p>
+<ul>
+<li>与CPU硬件无关，Windows利用软件模拟实现DEP，对操作系统提供一定的保护</li>
+<li>硬件DEP需要CPU的支持，操作系统通过设置内存页的NX（AMD）&#x2F;XD（Intel）属性标记，来指明不能从该内存执行代码</li>
+</ul>
+<h2 id="4-2-工作模式"><a href="#4-2-工作模式" class="headerlink" title="4.2. 工作模式"></a>4.2. 工作模式</h2><p>根据启动参数的不同，DEP工作模式可以分为四种：</p>
+<ul>
+<li>Optin：<ul>
+<li>仅将DEP保护应用于Windows系统组件和服务，对于其他程序不予保护</li>
+<li>用户可以通过应用程序兼容性工具为选定的程序强制启用DEP</li>
+<li>Vista及后续操作系统中，经过&#x2F;NXCOMPAT选项编译过的程序将启用DEP</li>
+<li>这种模式可以被应用程序动态关闭</li>
+</ul>
+</li>
+<li>Optout：为排除列表程序外的所有程序和服务启用DEP，用户可以手动在排除列表中指定不启用DEP保护的程序和服务。这种模式可以被应用程序动态关闭</li>
+<li>AlwaysOn：对所有进程启用DEP的保护，DEP不可以被关闭，目前只有在64位的操作系统才工作在AlwaysOn模式</li>
+<li>AlwaysOff：对所有进程都禁用DEP，DEP不能被动态开启</li>
+</ul>
+<p>通过计算机属性和<code>c:\boot.ini</code>文件中的<code>/noexecute</code>启动项的值，可以控制DEP的工作模式。</p>
+<h2 id="4-3-编译器选项：-NXCOMPAT"><a href="#4-3-编译器选项：-NXCOMPAT" class="headerlink" title="4.3. 编译器选项：&#x2F;NXCOMPAT"></a>4.3. 编译器选项：&#x2F;NXCOMPAT</h2><p>采用&#x2F;NXCOMPAT选项编译的程序会在文件的PE头中设置IMAGE_DLLCHARACTERISTICS_NX_COMPAT标识，该标识通过结构体IMAGE_OPTIONAL_HEADER中的DllCharacteristics变量进行体现，当DllCharacteristics设置为0x0100表示该程序采用了&#x2F;NXCOMPAT编译。经过&#x2F;NXCOMPAT选项编译的程序在Vista及后续操作系统中会自动启用DEP。</p>
+<h2 id="4-4-局限性"><a href="#4-4-局限性" class="headerlink" title="4.4. 局限性"></a>4.4. 局限性</h2><ul>
+<li>硬件DEP需要CPU的支持</li>
+<li>Windows不能对所有进程开启DEP保护，否则可能会出现执行异常</li>
+<li>当DEP工作在Optin和Optout下时，DEP是可以被动态关闭和开启的</li>
+</ul>
+<h2 id="4-5-绕过"><a href="#4-5-绕过" class="headerlink" title="4.5. 绕过"></a>4.5. 绕过</h2><h3 id="4-5-1-Ret2Libc（Return-to-libc）"><a href="#4-5-1-Ret2Libc（Return-to-libc）" class="headerlink" title="4.5.1. Ret2Libc（Return-to-libc）"></a>4.5.1. Ret2Libc（Return-to-libc）</h3><p>让程序返回到一个已经存在的系统函数中（必然存在于可执行页上），利用系统函数中的指令来完成功能，并在之后通过系统函数中的返回指令加上栈帧的配合回收程序的控制权。通过这种方法完成完整功能较为繁琐，可以通过以下三种方法简化过程：</p>
+<ul>
+<li>跳转到ZwSetInformationProcess函数将DEP关闭后再转入shellcode执行</li>
+<li>跳转到VirtualProtect函数来将shellcode所在内存页设置为可执行状态，然后再转入shellcode执行</li>
+<li>跳转到VIrtualAlloc函数开辟一段具有执行权限的内存空间，然后将shellcode复制到这段内存中执行</li>
+</ul>
+<h3 id="4-5-2-其它方法"><a href="#4-5-2-其它方法" class="headerlink" title="4.5.2. 其它方法"></a>4.5.2. 其它方法</h3><ul>
+<li>利用可能存在的可执行内存（如系统功能需要而创建的可执行内存）</li>
+<li>攻击.NET、Java applet中的可执行内存部分</li>
+</ul>
+<h1 id="5-ASLR"><a href="#5-ASLR" class="headerlink" title="5. ASLR"></a>5. ASLR</h1><p>对映像基址（可通过注册表修改工作模式为禁用、强制和根据PE头标识启用）、堆栈和PEB、TEB的加载地址进行地址随机化，从而干扰shellcode的定位。支持ASLR的程序会在它的PE头中设置IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE标识。ASLR对应到编译器的&#x2F;dynamicbase链接选项。</p>
+<h2 id="5-1-弱点"><a href="#5-1-弱点" class="headerlink" title="5.1. 弱点"></a>5.1. 弱点</h2><ul>
+<li>映像基址的偏移即后两个字节是固定不变的</li>
+<li>堆栈随机化的防护面有限</li>
+<li>PEB、TEB随机化的程度有限（在0x7FFDF000~0x7FFD4000之间移动），而且可以通过别的方法定位</li>
+</ul>
+<h2 id="5-2-绕过"><a href="#5-2-绕过" class="headerlink" title="5.2. 绕过"></a>5.2. 绕过</h2><ul>
+<li>利用未采用ASLR的模块（如Adobe Flash Player ActiveX控件）</li>
+<li>部分覆盖：映像基址随机化只对地址的前2个字节做随机化处理，而函数的返回地址、异常处理函数的指针、虚函数表指针存放在堆栈中，其相对于返回地址的偏移一般不会大于0x10000，所以我们只需要覆盖返回地址的最后一到两个字节即可定位</li>
+<li>Heap Spray（包括Java applet heap spray）</li>
+<li>.NET平台的IL-Only文件会强制启用ASLR，但是在.NET控件的运行版本号小于2.5的情况下会禁用ASLR</li>
+</ul>
+<h1 id="6-SEH覆写保护：SEHOP"><a href="#6-SEH覆写保护：SEHOP" class="headerlink" title="6. SEH覆写保护：SEHOP"></a>6. SEH覆写保护：SEHOP</h1><h2 id="6-1-原理"><a href="#6-1-原理" class="headerlink" title="6.1. 原理"></a>6.1. 原理</h2><p>在程序转入异常处理前，且在SafeSEH的RtlIsValidHandler函数校验前，SEHOP会检查SEH链上最后一个异常处理函数是否为系统默认异常处理函数，即检查SEH链的完整性。其伪代码如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (process_flags &amp; <span class="number">0x40</span> == <span class="number">0</span>) &#123;     <span class="comment">//如果没有SEH记录则不进行检测</span></span><br><span class="line">    <span class="keyword">if</span> (record != <span class="number">0xFFFFFFFF</span>) &#123;</span><br><span class="line">        <span class="comment">//开始检测</span></span><br><span class="line">        <span class="keyword">do</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (record &lt; stack_bottom || record &gt; stack_top)     <span class="comment">//SEH记录必须位于栈中</span></span><br><span class="line">                <span class="keyword">goto</span> corruption;</span><br><span class="line">            <span class="keyword">if</span> ((<span class="type">char</span>*)record + <span class="keyword">sizeof</span>(EXCEPTION_REGISTRATION) &gt; stack_top)    <span class="comment">//SEH记录结构需完全在栈中</span></span><br><span class="line">                <span class="keyword">goto</span> corruption;</span><br><span class="line">            <span class="keyword">if</span> ((record &amp; <span class="number">3</span>) != <span class="number">0</span>) <span class="comment">//SEH 记录必须 4 字节对齐</span></span><br><span class="line">                <span class="keyword">goto</span> corruption; handler = record-&gt;handler;</span><br><span class="line">            <span class="keyword">if</span> (handler &gt;= stack_bottom &amp;&amp; handler &lt; stack_top) <span class="comment">//异常处理函数地址不能位于栈中</span></span><br><span class="line">                <span class="keyword">goto</span> corruption; record = record-&gt;next; </span><br><span class="line">        &#125; <span class="keyword">while</span> (record != <span class="number">0xFFFFFFFF</span>); </span><br><span class="line">        <span class="comment">//遍历 S.E.H 链 </span></span><br><span class="line">        <span class="keyword">if</span> ((TEB-&gt;word_at_offset_0xFCA &amp; <span class="number">0x200</span>) != <span class="number">0</span>) &#123; </span><br><span class="line">            <span class="keyword">if</span> (handler != &amp;FinalExceptionHandler)<span class="comment">//核心检测，地球人都知道，不解释了 </span></span><br><span class="line">                <span class="keyword">goto</span> corruption; </span><br><span class="line">        &#125;</span><br><span class="line">    &#125; </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-2-绕过方法"><a href="#6-2-绕过方法" class="headerlink" title="6.2. 绕过方法"></a>6.2. 绕过方法</h2><ul>
+<li>攻击函数返回地址或者虚函数等</li>
+<li>利用未启用SEHOP的模块（编译器没有相关选项，但是微软出于兼容性的考虑对一些程序禁用了SEHOP，例如经过Armadilo加壳的软件。操作系统会根据PE头中的MajorLinkerVersion和MinorLinkerVersion两个标识来判断是否为程序禁用SEHOP。我们可以将这两个选项分别设置为0x53和0x52来模拟经过Armadilo加壳的程序，从而达到禁用SEHOP的目的）</li>
+<li>伪造一个完整的SEH链（定位FinalExceptionHandler函数的时候会受到ASLR的影响）</li>
+</ul>
+<h1 id="7-堆的安全机制"><a href="#7-堆的安全机制" class="headerlink" title="7. 堆的安全机制"></a>7. 堆的安全机制</h1><h2 id="7-1-安全机制"><a href="#7-1-安全机制" class="headerlink" title="7.1. 安全机制"></a>7.1. 安全机制</h2><h3 id="7-1-1-PEB-random"><a href="#7-1-1-PEB-random" class="headerlink" title="7.1.1. PEB random"></a>7.1.1. PEB random</h3><p>对PEB、TEB基址进行随机化。</p>
+<h3 id="7-1-2-Safe-Unlink"><a href="#7-1-2-Safe-Unlink" class="headerlink" title="7.1.2. Safe Unlink"></a>7.1.2. Safe Unlink</h3><p>在Unlink之前检查结点的指向是否正确。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">//普通卸载</span><br><span class="line">int remove (ListNode * node) &#123;</span><br><span class="line">    node -&gt; blink -&gt; flink = node -&gt; flink;</span><br><span class="line">    node -&gt; flink -&gt; blink = node -&gt; blink; </span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br><span class="line">//安全卸载</span><br><span class="line">int safe_remove (ListNode * node) &#123;</span><br><span class="line">    if( (node-&gt;blink-&gt;flink==node)&amp;&amp;(node-&gt;flink-&gt;blink==node) ) &#123;</span><br><span class="line">        node -&gt; blink -&gt; flink = node -&gt; flink; </span><br><span class="line">        node -&gt; flink -&gt; blink = node -&gt; blink; </span><br><span class="line">        return 1; </span><br><span class="line">    &#125;</span><br><span class="line">    else&#123;</span><br><span class="line">        //链表指针被破坏，进入异常 </span><br><span class="line">        return 0;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-1-3-heap-cookie"><a href="#7-1-3-heap-cookie" class="headerlink" title="7.1.3. heap cookie"></a>7.1.3. heap cookie</h3><p>原理类似于栈中的security cookie，用于检测堆溢出的发生，大小为1个字节。</p>
+<h3 id="7-1-4-元数据加密"><a href="#7-1-4-元数据加密" class="headerlink" title="7.1.4. 元数据加密"></a>7.1.4. 元数据加密</h3><p>在保存块首中的一些重要数据时，会与一个4字节的随机数进行异或运算，在使用这些数据时候需要再进行一次异或来还原。</p>
+<h2 id="7-2-弱点及绕过"><a href="#7-2-弱点及绕过" class="headerlink" title="7.2. 弱点及绕过"></a>7.2. 弱点及绕过</h2><ul>
+<li>PEB、TEB随机化的程度有限（在0x7FFDF000~0x7FFD4000之间移动），尤其在多线程状态下容易被预测出来</li>
+<li>heap cookie的变化区间为0-256，区间过小</li>
+<li>堆的各项保护措施是对堆块的关键结构进行保护，而对于堆中存储的内容是不保护的。所以可以攻击堆中存放的一些重要的数据或结构指针，如函数指针等</li>
+</ul>
+<h1 id="8-RELEO"><a href="#8-RELEO" class="headerlink" title="8. RELEO"></a>8. RELEO</h1><p>ELF文件独有的安全机制，用于防止got、plt和fini_array（程序结束时调用的函数组）被劫持，分为以下三种状态：</p>
+<ul>
+<li>Disabled：got表和plt表可写，fini_array可写</li>
+<li>Partial（默认）：只有got表可写</li>
+<li>Fulled：load time的时候全部函数的地址都已经resolve完成，不可写</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io">凌虚</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/">https://yslingxu.github.io/2026/04/28/漏洞挖掘/内存保护机制与绕过/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="external nofollow noreferrer" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://yslingxu.github.io" target="_blank">凌虚的博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E/">漏洞</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8/">漏洞利用</a><a class="post-meta__tags" href="/tags/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4/">内存保护</a></div><div class="post-share"><div class="social-share" data-image="/images/avatar.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">漏洞挖掘方法</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 图灵机停机问题程序存在不可计算性，因此理论上无法彻底消灭软件中存在的缺陷（Bug和漏洞）。 1.2. 白盒测试：源代码审计可利用以下工具进行源代码审计：  Fortify：在编译阶段扫描若干种安全风险 Rough Auditing Tool for Security：用于分析C&#x2F;C++语言的语法树，寻找存在潜在安全问题的函数调用 Bugs Errors And Mistakes：由IBM研究院研发，使用数据流分析的方法分析源代码的所有可执行路径，以检测代码中潜在的bug SLAM：检测驱动中的bug Flaw Finder：用Python语言开发的代码分析工具 Prexis：可以审计多种语言的源代码，审计的漏洞类型超过30种 Coverity：提高软件质量的源代码静态分析工具  1.3. 黑盒测试：FuzzFuzz使用带有攻击性的畸形数据来触发各种类型的漏洞（不能exploit），可使用以下工具：  SPIKE：针对网络协议的模糊测试工具，使用了基于数据块的Fuzz理论 beSTORM：利用了模糊测试技术来实现针对网络协议的安全测试  2. 文件类型...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">ROP</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术，可以用来绕过现代操作系统的各种通用防御。 2. 准备工作2.1. 设置coredump可以防止出现程序在GDB调试环境下的内存地址与实际运行环境下内存地址不同的情况。 12345# 开启coredumpulimit -c unlimitedsudo sh -c &#x27;echo &quot;/tmp/core.%t&quot; &gt; /proc/sys/kernel/core_pattern&#x27;# 调试coredump文件，第一个xxx为可执行文件名，第二个xxx为coredump文件名...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-27</div><div class="info-item-2">漏洞利用原理</div></div><div class="info-2"><div class="info-item-1">1. 基础知识以下知识均为逆向基础知识，此处做个记录，不再赘述。  漏洞概述 BUG与漏洞 漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP） 漏洞公布：CVE、CERT   二进制文件格式 PE格式 虚拟内存（4GB进程空间） PE格式与虚拟内存的映射   工具 OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg IDA Pro UE、010 Editor、Winhex VMWare Python   栈溢出 内存布局（代码、数据、栈、堆等） 函数调用与栈帧、函数调用约定 缓冲区溢出覆盖变量、EBP、返回地址（可以利用返回地址执行栈中植入的代码） 使用JMP ESP（使用kernel32或者user32里面的代码，地址一般情况下稳定）作为跳转，以防栈区地址变化    2. shellcode shellcode为功能代码（payload） exploit为攻击代码  2.1. 缓冲区的组织 缓冲区组成（shellcode、nop、跳转地址） 跳板 jmp esp（mov eax,esp ; jmp ...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">漏洞挖掘方法</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 图灵机停机问题程序存在不可计算性，因此理论上无法彻底消灭软件中存在的缺陷（Bug和漏洞）。 1.2. 白盒测试：源代码审计可利用以下工具进行源代码审计：  Fortify：在编译阶段扫描若干种安全风险 Rough Auditing Tool for Security：用于分析C&#x2F;C++语言的语法树，寻找存在潜在安全问题的函数调用 Bugs Errors And Mistakes：由IBM研究院研发，使用数据流分析的方法分析源代码的所有可执行路径，以检测代码中潜在的bug SLAM：检测驱动中的bug Flaw Finder：用Python语言开发的代码分析工具 Prexis：可以审计多种语言的源代码，审计的漏洞类型超过30种 Coverity：提高软件质量的源代码静态分析工具  1.3. 黑盒测试：FuzzFuzz使用带有攻击性的畸形数据来触发各种类型的漏洞（不能exploit），可使用以下工具：  SPIKE：针对网络协议的模糊测试工具，使用了基于数据块的Fuzz理论 beSTORM：利用了模糊测试技术来实现针对网络协议的安全测试  2. 文件类型...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">ROP</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术，可以用来绕过现代操作系统的各种通用防御。 2. 准备工作2.1. 设置coredump可以防止出现程序在GDB调试环境下的内存地址与实际运行环境下内存地址不同的情况。 12345# 开启coredumpulimit -c unlimitedsudo sh -c &#x27;echo &quot;/tmp/core.%t&quot; &gt; /proc/sys/kernel/core_pattern&#x27;# 调试coredump文件，第一个xxx为可执行文件名，第二个xxx为coredump文件名...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">凌虚</div><div class="author-info-description">空谷临风，逸世凌虚</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><a id="card-info-btn" target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/yslingxu"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yslingxu" rel="external nofollow noreferrer" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:yslingxu@outlook.com" rel="external nofollow noreferrer" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">给大家拜个早年！新年快乐！</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E6%A6%82%E8%BF%B0"><span class="toc-text">1. 内存保护机制概述</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-1-%E6%BC%8F%E6%B4%9E%E8%B5%B7%E6%BA%90"><span class="toc-text">1.1. 漏洞起源</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6"><span class="toc-text">1.2. 内存保护机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-3-%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E7%9A%84%E5%AF%B9%E6%8A%97"><span class="toc-text">1.3. 内存保护机制的对抗</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-GS%E7%BC%96%E8%AF%91%E6%8A%80%E6%9C%AF"><span class="toc-text">2. GS编译技术</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-%E5%8E%9F%E7%90%86"><span class="toc-text">2.1. 原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-%E4%B8%80%E4%BA%9B%E6%9C%BA%E5%88%B6"><span class="toc-text">2.2. 一些机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-3-%E5%BC%B1%E7%82%B9%EF%BC%9AGS%E4%BF%9D%E6%8A%A4%E6%9D%A1%E4%BB%B6"><span class="toc-text">2.3. 弱点：GS保护条件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-4-%E5%8F%98%E9%87%8F%E9%87%8D%E6%8E%92"><span class="toc-text">2.4. 变量重排</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-5-%E7%BB%95%E8%BF%87"><span class="toc-text">2.5. 绕过</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#3-SafeSEH"><span class="toc-text">3. SafeSEH</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#3-1-%E5%8E%9F%E7%90%86"><span class="toc-text">3.1. 原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-2-%E6%B5%81%E7%A8%8B"><span class="toc-text">3.2. 流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-3-%E5%85%81%E8%AE%B8%E6%89%A7%E8%A1%8C%E7%9A%84%E6%83%85%E5%86%B5"><span class="toc-text">3.3. 允许执行的情况</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-4-%E7%BB%95%E8%BF%87"><span class="toc-text">3.4. 绕过</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-DEP%EF%BC%9A%E6%95%B0%E6%8D%AE%E6%89%A7%E8%A1%8C%E4%BF%9D%E6%8A%A4"><span class="toc-text">4. DEP：数据执行保护</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-1-%E5%8E%9F%E7%90%86"><span class="toc-text">4.1. 原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-2-%E5%B7%A5%E4%BD%9C%E6%A8%A1%E5%BC%8F"><span class="toc-text">4.2. 工作模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-3-%E7%BC%96%E8%AF%91%E5%99%A8%E9%80%89%E9%A1%B9%EF%BC%9A-NXCOMPAT"><span class="toc-text">4.3. 编译器选项：&#x2F;NXCOMPAT</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-4-%E5%B1%80%E9%99%90%E6%80%A7"><span class="toc-text">4.4. 局限性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-5-%E7%BB%95%E8%BF%87"><span class="toc-text">4.5. 绕过</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-5-1-Ret2Libc%EF%BC%88Return-to-libc%EF%BC%89"><span class="toc-text">4.5.1. Ret2Libc（Return-to-libc）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-5-2-%E5%85%B6%E5%AE%83%E6%96%B9%E6%B3%95"><span class="toc-text">4.5.2. 其它方法</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-ASLR"><span class="toc-text">5. ASLR</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#5-1-%E5%BC%B1%E7%82%B9"><span class="toc-text">5.1. 弱点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-2-%E7%BB%95%E8%BF%87"><span class="toc-text">5.2. 绕过</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-SEH%E8%A6%86%E5%86%99%E4%BF%9D%E6%8A%A4%EF%BC%9ASEHOP"><span class="toc-text">6. SEH覆写保护：SEHOP</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#6-1-%E5%8E%9F%E7%90%86"><span class="toc-text">6.1. 原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-2-%E7%BB%95%E8%BF%87%E6%96%B9%E6%B3%95"><span class="toc-text">6.2. 绕过方法</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#7-%E5%A0%86%E7%9A%84%E5%AE%89%E5%85%A8%E6%9C%BA%E5%88%B6"><span class="toc-text">7. 堆的安全机制</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#7-1-%E5%AE%89%E5%85%A8%E6%9C%BA%E5%88%B6"><span class="toc-text">7.1. 安全机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-1-PEB-random"><span class="toc-text">7.1.1. PEB random</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-2-Safe-Unlink"><span class="toc-text">7.1.2. Safe Unlink</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-3-heap-cookie"><span class="toc-text">7.1.3. heap cookie</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-4-%E5%85%83%E6%95%B0%E6%8D%AE%E5%8A%A0%E5%AF%86"><span class="toc-text">7.1.4. 元数据加密</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-2-%E5%BC%B1%E7%82%B9%E5%8F%8A%E7%BB%95%E8%BF%87"><span class="toc-text">7.2. 弱点及绕过</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#8-RELEO"><span class="toc-text">8. RELEO</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法">漏洞挖掘方法</a><time datetime="2026-04-28T03:33:10.000Z" title="发表于 2026-04-28 11:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过">内存保护机制与绕过</a><time datetime="2026-04-28T02:33:10.000Z" title="发表于 2026-04-28 10:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP">ROP</a><time datetime="2026-04-28T01:33:10.000Z" title="发表于 2026-04-28 09:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理">漏洞利用原理</a><time datetime="2026-04-27T14:33:10.000Z" title="发表于 2026-04-27 22:33:10">2026-04-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E4%BC%9A%E8%AE%A1%E5%AD%A6/%E4%BC%9A%E8%AE%A1%E5%AD%A6%E5%9F%BA%E7%A1%80/" title="会计学基础">会计学基础</a><time datetime="2026-04-27T11:33:10.000Z" title="发表于 2026-04-27 19:33:10">2026-04-27</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 凌虚</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

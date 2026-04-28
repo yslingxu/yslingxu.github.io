@@ -1,0 +1,413 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>漏洞利用原理 | 凌虚的博客</title><meta name="author" content="凌虚"><meta name="copyright" content="凌虚"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 基础知识以下知识均为逆向基础知识，此处做个记录，不再赘述。  漏洞概述 BUG与漏洞 漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP） 漏洞公布：CVE、CERT   二进制文件格式 PE格式 虚拟内存（4GB进程空间） PE格式与虚拟内存的映射   工具 OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg I">
+<meta property="og:type" content="article">
+<meta property="og:title" content="漏洞利用原理">
+<meta property="og:url" content="https://yslingxu.github.io/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="凌虚的博客">
+<meta property="og:description" content="1. 基础知识以下知识均为逆向基础知识，此处做个记录，不再赘述。  漏洞概述 BUG与漏洞 漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP） 漏洞公布：CVE、CERT   二进制文件格式 PE格式 虚拟内存（4GB进程空间） PE格式与虚拟内存的映射   工具 OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg I">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yslingxu.github.io/images/avatar.png">
+<meta property="article:published_time" content="2026-04-27T14:33:10.000Z">
+<meta property="article:modified_time" content="2026-04-28T04:12:24.000Z">
+<meta property="article:author" content="凌虚">
+<meta property="article:tag" content="漏洞">
+<meta property="article:tag" content="漏洞挖掘">
+<meta property="article:tag" content="漏洞利用">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yslingxu.github.io/images/avatar.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "漏洞利用原理",
+  "url": "https://yslingxu.github.io/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/",
+  "image": "https://yslingxu.github.io/images/avatar.png",
+  "datePublished": "2026-04-27T14:33:10.000Z",
+  "dateModified": "2026-04-28T04:12:24.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "凌虚",
+      "url": "https://yslingxu.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://yslingxu.github.io/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '漏洞利用原理',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">凌虚的博客</span></a><a class="nav-page-title" href="/"><span class="site-name">漏洞利用原理</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">漏洞利用原理</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-27T14:33:10.000Z" title="发表于 2026-04-27 22:33:10">2026-04-27</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-28T04:12:24.000Z" title="更新于 2026-04-28 12:12:24">2026-04-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="1-基础知识"><a href="#1-基础知识" class="headerlink" title="1. 基础知识"></a>1. 基础知识</h1><p>以下知识均为逆向基础知识，此处做个记录，不再赘述。</p>
+<ul>
+<li>漏洞概述<ul>
+<li>BUG与漏洞</li>
+<li>漏洞挖掘 -&gt; 漏洞分析（POC） -&gt; 漏洞利用（EXP）</li>
+<li>漏洞公布：CVE、CERT</li>
+</ul>
+</li>
+<li>二进制文件格式<ul>
+<li>PE格式</li>
+<li>虚拟内存（4GB进程空间）</li>
+<li>PE格式与虚拟内存的映射</li>
+</ul>
+</li>
+<li>工具<ul>
+<li>OD、SoftICE（Compuware SoftICE Driver Suite 驱动套件）、WinDbg</li>
+<li>IDA Pro</li>
+<li>UE、010 Editor、Winhex</li>
+<li>VMWare</li>
+<li>Python</li>
+</ul>
+</li>
+<li>栈溢出<ul>
+<li>内存布局（代码、数据、栈、堆等）</li>
+<li>函数调用与栈帧、函数调用约定</li>
+<li>缓冲区溢出覆盖变量、EBP、返回地址（可以利用返回地址执行栈中植入的代码）</li>
+<li>使用JMP ESP（使用kernel32或者user32里面的代码，地址一般情况下稳定）作为跳转，以防栈区地址变化</li>
+</ul>
+</li>
+</ul>
+<h1 id="2-shellcode"><a href="#2-shellcode" class="headerlink" title="2. shellcode"></a>2. shellcode</h1><ul>
+<li>shellcode为功能代码（payload）</li>
+<li>exploit为攻击代码</li>
+</ul>
+<h2 id="2-1-缓冲区的组织"><a href="#2-1-缓冲区的组织" class="headerlink" title="2.1. 缓冲区的组织"></a>2.1. 缓冲区的组织</h2><ul>
+<li>缓冲区组成（shellcode、nop、跳转地址）</li>
+<li>跳板<ul>
+<li>jmp esp（mov eax,esp ; jmp eax等等）</li>
+<li>通过nop大片淹没缓冲区，盲跳</li>
+</ul>
+</li>
+<li>注意事项<ul>
+<li>抬高栈顶保护shellcode，以防栈帧返回后的栈操作破坏了shellcode</li>
+</ul>
+</li>
+<li>函数返回地址移位（缓冲区前期填充内容长度不定，可能导致覆盖返回地址出现1-3个字节的偏移）<ul>
+<li>解决方法：堆喷，使用4字节相同的返回地址如0C0C0C0C</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-2-开发通用shellcode：跨平台、跨计算机"><a href="#2-2-开发通用shellcode：跨平台、跨计算机" class="headerlink" title="2.2. 开发通用shellcode：跨平台、跨计算机"></a>2.2. 开发通用shellcode：跨平台、跨计算机</h2><ul>
+<li>定位API：通过PEB<ul>
+<li>缩短shellcode：为了节省存储函数名称的空间，插入hash算法，通过比对字符串的hash值来替换字符串比对</li>
+<li>在将HASH压入栈中之前，需要先将增量标识DF清零，因为当通过异常处理机制植入shellcode的时候，往往会产生标志位的变化，使得shellcode中的字符串处理方向被改变，从而出现错误</li>
+</ul>
+</li>
+<li>shellcode的调试：初始化一个进程环境 + 指针跳转</li>
+<li>shellcode：可以直接从Metasploit中获取各种语言、各种功能、各种平台的shellcode<br><img src="/assets/images/image-16.png" alt="alt text"></li>
+</ul>
+<h2 id="2-3-shellcode编码技术"><a href="#2-3-shellcode编码技术" class="headerlink" title="2.3. shellcode编码技术"></a>2.3. shellcode编码技术</h2><h3 id="2-3-1-原因"><a href="#2-3-1-原因" class="headerlink" title="2.3.1. 原因"></a>2.3.1. 原因</h3><ul>
+<li>NULL字节截断限制</li>
+<li>可打印字符限制</li>
+<li>IDS特征检测与拦截</li>
+</ul>
+<h3 id="2-3-2-解决方案"><a href="#2-3-2-解决方案" class="headerlink" title="2.3.2. 解决方案"></a>2.3.2. 解决方案</h3><p>解码器+编码，类似于加壳（现在很多杀毒软件会采取内存杀毒，即先将程序加载到内存中，再进行查杀），最简单的编码方式为异或</p>
+<h3 id="2-3-3-集成"><a href="#2-3-3-集成" class="headerlink" title="2.3.3. 集成"></a>2.3.3. 集成</h3><p>Metasploit提供了大量的编码解码方式</p>
+<h2 id="2-4-shellcode压缩"><a href="#2-4-shellcode压缩" class="headerlink" title="2.4. shellcode压缩"></a>2.4. shellcode压缩</h2><ul>
+<li>使用短指令、复合指令（一个指令多个功能）</li>
+<li>函数调用参数<ul>
+<li>参数地址重合</li>
+<li>多个压入NULL的指令可以合并为一个内存空间填0的指令</li>
+</ul>
+</li>
+<li>代码和数据复用（例如一个函数的参数为结构体或内存大小的值，只要大于某个数函数就会正常执行，这时就可以将一块代码当作数据作为参数，节省一个压栈指令）</li>
+<li>调整栈顶回收栈顶之上的废弃数据，节省初始化栈区的指令</li>
+<li>利用寄存器存储数据，避免栈区的复杂操作</li>
+<li>hash字符串（需要定制合适的hash算法）</li>
+</ul>
+<h1 id="3-Metasploit"><a href="#3-Metasploit" class="headerlink" title="3. Metasploit"></a>3. Metasploit</h1><p>Metasploit3.X版本基于Ruby语言：</p>
+<ul>
+<li>Ruby（MSF开发必需）</li>
+<li>编写EXP</li>
+<li>发布POC</li>
+</ul>
+<h2 id="3-1-流程"><a href="#3-1-流程" class="headerlink" title="3.1. 流程"></a>3.1. 流程</h2><ul>
+<li>触发漏洞</li>
+<li>选取shellcode</li>
+<li>设定目标等参数</li>
+<li>选用编码解码算法</li>
+</ul>
+<h2 id="3-2-模块"><a href="#3-2-模块" class="headerlink" title="3.2. 模块"></a>3.2. 模块</h2><ul>
+<li>exploit：漏洞触发信息</li>
+<li>auxiliary：MSF额外的插件程序，如网络欺骗工具、DOS工具、Sniffer工具等</li>
+<li>payload：可运行于多种操作系统下、多种功能的大量shellcode</li>
+<li>encoder：编码算法</li>
+<li>nop：填充数据（不影响shellcode执行的指令）生成器，提供了不同操作系统、不同语言的的填充数据生成，用于组织缓冲区</li>
+</ul>
+<h2 id="3-3-MSF的插件程序"><a href="#3-3-MSF的插件程序" class="headerlink" title="3.3. MSF的插件程序"></a>3.3. MSF的插件程序</h2><ul>
+<li>msfpescan可以直接扫描PE文件中的跳板指令</li>
+</ul>
+<h1 id="4-堆溢出"><a href="#4-堆溢出" class="headerlink" title="4. 堆溢出"></a>4. 堆溢出</h1><p>本书将主要基于Windows2000-Windows XP SP1平台的堆管理策略。</p>
+<h2 id="4-1-堆与栈的区别"><a href="#4-1-堆与栈的区别" class="headerlink" title="4.1. 堆与栈的区别"></a>4.1. 堆与栈的区别</h2><table>
+<thead>
+<tr>
+<th align="center">类别</th>
+<th align="center">堆</th>
+<th align="center">栈</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">结构</td>
+<td align="center">动态增长的链表</td>
+<td align="center">函数局部数组</td>
+</tr>
+<tr>
+<td align="center">申请方式</td>
+<td align="center">用malloc函数申请</td>
+<td align="center">程序中直接声明</td>
+</tr>
+<tr>
+<td align="center">释放方式</td>
+<td align="center">用free函数释放</td>
+<td align="center">系统自动回收</td>
+</tr>
+<tr>
+<td align="center">管理方式</td>
+<td align="center">程序员管理</td>
+<td align="center">系统管理</td>
+</tr>
+<tr>
+<td align="center">所处位置</td>
+<td align="center">变化范围很大</td>
+<td align="center"></td>
+</tr>
+<tr>
+<td align="center">增长方向</td>
+<td align="center">低-&gt;高（不考虑内存碎片）</td>
+<td align="center">高-&gt;低</td>
+</tr>
+</tbody></table>
+<h2 id="4-2-堆的组织方式"><a href="#4-2-堆的组织方式" class="headerlink" title="4.2. 堆的组织方式"></a>4.2. 堆的组织方式</h2><h3 id="4-2-1-堆块和堆表"><a href="#4-2-1-堆块和堆表" class="headerlink" title="4.2.1. 堆块和堆表"></a>4.2.1. 堆块和堆表</h3><ul>
+<li>堆块：堆区的内存按不同大小组织成块，称为堆块。一个堆块包括两个部分：块首（堆块头部的几个字节，标识这个堆块自身的信息如块的大小、空闲还是占用，另外还有用于链入堆表的指针）和块身（分配给用户使用的空间）。</li>
+<li>堆表：堆表一般位于堆区的起始位置，用于索引堆块。堆表的数据结构决定了堆的组织方式。在Windows中，占用态的堆块被使用它的程序索引，而堆表只索引所有空闲态的堆块。最重要的堆表有两种：<ul>
+<li>空闲双向链表：Freelist，简称空表</li>
+<li>快速单向链表：Lookaside，简称快表。只有堆是可扩展的时候（在HeapCreate函数参数中指定）快表才会启用。</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-2-2-空闲双向链表"><a href="#4-2-2-空闲双向链表" class="headerlink" title="4.2.2. 空闲双向链表"></a>4.2.2. 空闲双向链表</h3><p>根据所链入堆块的大小来区分，空闲双向链表总共有128条（每条链表所链入堆块大小&#x3D;索引×8字节，如第二条链表<code>free[1]</code>链入了所有大小为8字节的空闲堆块），堆表区中有一个128项的指针数组，作为空闲双向链表的表头。而第一条链表<code>free[0]</code>链入了所有大于等于1024字节小于512KB的堆块，这些堆块根据各自的大小按照升序排列。</p>
+<h3 id="4-2-3-快速单向链表"><a href="#4-2-3-快速单向链表" class="headerlink" title="4.2.3. 快速单向链表"></a>4.2.3. 快速单向链表</h3><p>快速单向链表是Windows用来加速堆块分配而采用的一种堆表，这类单向链表之所以快，是因为其中从来不会发生堆块合并（其中的空闲块块首被设置为占用态，用来防止堆块合并）。快表也有128条，其组织结构与空表类似，只是其中的堆块按照单链表组织。快表总是被初始化为空，而且每条快表最多只有4个结点，故很快就会被填满。</p>
+<h3 id="4-2-4-堆组织方式图"><a href="#4-2-4-堆组织方式图" class="headerlink" title="4.2.4. 堆组织方式图"></a>4.2.4. 堆组织方式图</h3><p><img src="/assets/images/image-17.png" alt="alt text"></p>
+<h2 id="4-3-堆操作"><a href="#4-3-堆操作" class="headerlink" title="4.3. 堆操作"></a>4.3. 堆操作</h2><h3 id="4-3-1-普通堆块分配"><a href="#4-3-1-普通堆块分配" class="headerlink" title="4.3.1. 普通堆块分配"></a>4.3.1. 普通堆块分配</h3><p>堆块分配步骤如下：</p>
+<ul>
+<li>快表分配：在快表中寻找大小精确匹配的空闲堆块，失败则继续。</li>
+<li>普通空表精确分配：在空表中寻找大小精确匹配的空闲堆块，失败则继续。</li>
+<li>普通空表分割分配：在空表中寻找最小的能够满足要求的空闲块，失败则继续。成功则从中按请求的大小精确分割出一块进行分配，然后将剩下的部分重新标注块首，链入空表。</li>
+<li>零号空表分配：先判断最后一个块即表中最大块能否满足要求（如果最大块都无法满足要求，前面的小块更无法满足），如果能则正向搜索最小的能够满足要求的空闲块进行精确或分割型分配。</li>
+</ul>
+<p>任何时候寻找到或者分割出合适的堆块后，就将其状态修改为占用态，把它从堆表中摘除，最后返回一个指向堆块块身的指针给程序使用。</p>
+<blockquote>
+<p>注意：这里没有讨论堆缓存（heap cache）、低碎片堆（LFH）和虚分配。</p>
+</blockquote>
+<h3 id="4-3-2-堆块释放"><a href="#4-3-2-堆块释放" class="headerlink" title="4.3.2. 堆块释放"></a>4.3.2. 堆块释放</h3><p>将堆块状态改为空闲，链入相应的堆表的末尾（分配的时候也先从堆表末尾拿）。</p>
+<h3 id="4-3-3-堆块合并"><a href="#4-3-3-堆块合并" class="headerlink" title="4.3.3. 堆块合并"></a>4.3.3. 堆块合并</h3><p>经过反复的申请与释放操作，堆区会产生很多内存碎片，不利于内存有效利用。当堆管理系统发现两个空闲堆块彼此相邻的时候，就会进行堆块合并操作：</p>
+<ul>
+<li>将两个块从空闲链表中摘除</li>
+<li>合并堆块</li>
+<li>调整合并后大块的块首信息</li>
+<li>将新块重新链入空闲链表。</li>
+</ul>
+<p>另外，堆区还可以进行内存紧缩操作，由RtlCompactHeap执行，该操作会对整个堆进行调整，尽量合并可用的碎片。</p>
+<h3 id="4-3-4-堆块分配策略"><a href="#4-3-4-堆块分配策略" class="headerlink" title="4.3.4. 堆块分配策略"></a>4.3.4. 堆块分配策略</h3><table>
+<thead>
+<tr>
+<th align="center">类别</th>
+<th align="center">大小</th>
+<th align="center">分配</th>
+<th align="center">释放</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">小块</td>
+<td align="center">&lt;1KB</td>
+<td align="center">快表分配-&gt;普通空表分配-&gt;堆缓存分配-&gt;零号空表分配-&gt;进行内存紧缩后再尝试分配-&gt;若仍无法分配，返回NULL</td>
+<td align="center">链入快表（只能链入4个空闲块）-&gt;如果快表满，则将其链入相应的空表</td>
+</tr>
+<tr>
+<td align="center">大块</td>
+<td align="center">1KB≤SIZE&lt;512KB</td>
+<td align="center">堆缓存分配-&gt;零号空表分配</td>
+<td align="center">放入堆缓存-&gt;若堆缓存满，将链入零号空表</td>
+</tr>
+<tr>
+<td align="center">巨块</td>
+<td align="center">≥512KB</td>
+<td align="center">非常罕见，使用虚分配方法（实际上并不是从堆区分配的）</td>
+<td align="center">直接释放，无堆表操作</td>
+</tr>
+</tbody></table>
+<h2 id="4-4-堆的调试"><a href="#4-4-堆的调试" class="headerlink" title="4.4. 堆的调试"></a>4.4. 堆的调试</h2><p>堆的调试与栈的调试不同，调试器加载程序和正常启动程序两者的堆是有差异的，所以如果需要调试正常启动程序的堆，需要在程序中插入<code>int 3</code>指令，程序正常启动，中断后再附加调试。详细差异细节及调试过程细节见书内。</p>
+<h2 id="4-5-堆块首部结构"><a href="#4-5-堆块首部结构" class="headerlink" title="4.5. 堆块首部结构"></a>4.5. 堆块首部结构</h2><p>由于已经过时，见书内。</p>
+<h2 id="4-6-堆操作溢出"><a href="#4-6-堆操作溢出" class="headerlink" title="4.6. 堆操作溢出"></a>4.6. 堆操作溢出</h2><p>在堆块的分配、释放、合并中，会出现一系列的链表操作。如果通过堆溢出淹没堆块的块首信息，改写堆块的链表前后指针，就可以在链表操作中得到一次写入任意内存地址为任意值的机会（原理可查阅百度资料或者自行模拟）。通过写入以下地址，就可以劫持控制流：</p>
+<ul>
+<li>栈帧中的返回地址</li>
+<li>SEH</li>
+<li>重要系统函数的调用地址（got表、IAT表）</li>
+<li>PEB中线程同步函数的入口地址：每个进程的PEB中都存放着一对同步函数指针，指向RtlEnterCriticalSection和RtlLeaveCriticalSection，在进程退出时这两个函数会被 ExitProcess函数调用（PEB的位置和这对指针在PEB中的偏移始终不会变化，所以这个写入点比较稳定），测试平台为win2000</li>
+<li>其它软性目标<ul>
+<li>内存变量</li>
+<li>执行代码</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-6-1-一些注意事项"><a href="#4-6-1-一些注意事项" class="headerlink" title="4.6.1. 一些注意事项"></a>4.6.1. 一些注意事项</h3><ul>
+<li>调试堆与正常堆存在区别</li>
+<li>shellcode中可能需要修复原环境</li>
+<li>如何定位shellcode：跳板技术</li>
+<li>DWORD SHOOT会导致两块内存被改写，其中一块用作劫持控制流，另外一块则会导致shellcode中的4个字节被改写，需要注意以防破坏shellcode的功能</li>
+</ul>
+<h2 id="4-7-利用chunk重设大小攻击堆"><a href="#4-7-利用chunk重设大小攻击堆" class="headerlink" title="4.7. 利用chunk重设大小攻击堆"></a>4.7. 利用chunk重设大小攻击堆</h2><p>在进行堆分配的时候，如果申请的空间小于堆块的大小，会将堆块分割，将剩余的堆块链入堆表，在这个链入过程中，通过操控前后指针，就可以获得DWORD SHOOT的机会。</p>
+<h2 id="4-8-利用Lookaside表进行堆溢出"><a href="#4-8-利用Lookaside表进行堆溢出" class="headerlink" title="4.8. 利用Lookaside表进行堆溢出"></a>4.8. 利用Lookaside表进行堆溢出</h2><p>快表中的单链表在拆卸时没有进行安全校验，通过修改自身的后指针，可以修改拆卸后前一个堆块的后指针为任意值。在下一次进行堆块分配时，会将任意值指向的堆块分配出去，如果拥有本次分配出来的内存的写入权，就获得了一次写入任意内存的机会。</p>
+<h1 id="5-其它内存攻击技术"><a href="#5-其它内存攻击技术" class="headerlink" title="5. 其它内存攻击技术"></a>5. 其它内存攻击技术</h1><h2 id="5-1-SEH"><a href="#5-1-SEH" class="headerlink" title="5.1. SEH"></a>5.1. SEH</h2><p>SEH结构体位于栈中，通过栈溢出或者堆溢出修改SEH结构体，即可实现劫持控制流。</p>
+<h2 id="5-2-VEH"><a href="#5-2-VEH" class="headerlink" title="5.2. VEH"></a>5.2. VEH</h2><p>利用堆溢出的DWORD SHOOT修改指向VEH头节点的指针，在异常处理开始后，即可实现劫持控制流。</p>
+<h2 id="5-3-攻击TEB中的SEH头节点"><a href="#5-3-攻击TEB中的SEH头节点" class="headerlink" title="5.3. 攻击TEB中的SEH头节点"></a>5.3. 攻击TEB中的SEH头节点</h2><p>线程的SEH链通过TEB的第一个DWORD标识(fs:0)。通过修改TEB中的这个指针，在异常发生时就能劫持控制流。</p>
+<h3 id="5-3-1-局限性"><a href="#5-3-1-局限性" class="headerlink" title="5.3.1. 局限性"></a>5.3.1. 局限性</h3><p>在多线程环境下，每个线程都有一个TEB，第一个TEB开始于地址0x7FFDE000，之后新建线程的TEB将紧随前边的TEB，之间相隔0x1000字节，并向内存低址方向增长。当线程退出时，对应的TEB也被销毁，腾出的TEB空间可以被新建的线程重复使用。所以当遇到多线程的程序（尤其是服务器程序，存在大量的新建、销毁线程操作）时，将难以定位TEB。因此，攻击TEB中SEH头节点的方法一般用于单线程的程序。虽然通过创建很多线程或关闭大量线程或许可以控制TEB排列，但是在多线程状态下，还有许多比利用TEB更加容易的备选方案。</p>
+<h2 id="5-4-攻击UEF"><a href="#5-4-攻击UEF" class="headerlink" title="5.4. 攻击UEF"></a>5.4. 攻击UEF</h2><p>UnhandledExceptionFilter即系统默认的异常处理函数，如果能够利用堆溢出产生的DWORD SHOOT将该函数的调用句柄覆盖为shellcode的入口地址，再制造一个其他异常处理都无法解决的异常，那么当系统调用UEF时，shellcode就可以得到执行。UEF句柄在不同操作系统和补丁版本下可能不同，通过反汇编kernel32.dll中的导出函数SetUnhandledExceptionFilter即可获取。有的时候，结合UEF和跳板技术，能够让成功率更高。在异常发生时，EDI往往仍然指向堆中离shellcode不远的地方，把UEF的句柄覆盖成一条<code>call dword ptr [edi+0x78]</code>的指令地址往往就能让程序跳到shellcode中，除此以外，ESI、EBP、EBX、EDX等寄存器也有同样的效果。</p>
+<h2 id="5-5-攻击PEB中的函数指针"><a href="#5-5-攻击PEB中的函数指针" class="headerlink" title="5.5. 攻击PEB中的函数指针"></a>5.5. 攻击PEB中的函数指针</h2><p>ExitProcess在清理现场的时候需要进入临界区以同步线程，因此会调用RtlEnterCriticalSection和RtlLeaveCriticalSection，这两个函数的指针存放在PEB中，所以通过DWORD SHOOT把PEB中的这对指针修改成shellcode的入口地址，那么，在程序最终结束时，shellcode将获取控制权。PEB的位置永远不变，因此，这种方法更加可靠。</p>
+<h2 id="5-6-off-by-one"><a href="#5-6-off-by-one" class="headerlink" title="5.6. off by one"></a>5.6. off by one</h2><p>仅仅溢出了一个或者少数几个字节的情况，可以对EBP造成一定范围的偏移导致溢出，另外还可以结合破坏邻接变量，控制程序执行流程或者导致整数溢出等问题。</p>
+<h2 id="5-7-C-的虚函数"><a href="#5-7-C-的虚函数" class="headerlink" title="5.7. C++的虚函数"></a>5.7. C++的虚函数</h2><p>在C++中，多态特性主要靠对虚函数的动态调用来体现。一个类中可能有很多个虚函数，虚函数的入口地址被统一保存在虚表（Vtable）中，对象在使用虚函数时，先通过虚表指针找到虚表，然后从虚表中取出最终的函数入口地址进行调用。虚表指针保存在对象的内存空间中，紧接着虚表指针的是其他成员变量。如果对象中的成员变量发生了溢出，有机会修改对象中的虚表指针或修改虚表中的虚函数指针，那么在程序调用虚函数时就会跑去执行shellcode。</p>
+<h2 id="5-8-bss溢出"><a href="#5-8-bss溢出" class="headerlink" title="5.8. bss溢出"></a>5.8. bss溢出</h2><h2 id="5-9-data溢出"><a href="#5-9-data溢出" class="headerlink" title="5.9. data溢出"></a>5.9. data溢出</h2><p>通常用于覆盖指针。</p>
+<h2 id="5-10-整数溢出"><a href="#5-10-整数溢出" class="headerlink" title="5.10. 整数溢出"></a>5.10. 整数溢出</h2><p>通常位于无符号与有符号转换和整数加减乘除法，通常转换为缓冲区溢出和逻辑漏洞等。</p>
+<h2 id="5-11-UAF"><a href="#5-11-UAF" class="headerlink" title="5.11. UAF"></a>5.11. UAF</h2><h2 id="5-12-Double-Free"><a href="#5-12-Double-Free" class="headerlink" title="5.12. Double Free"></a>5.12. Double Free</h2><h2 id="5-13-堆喷：Heap-Spray"><a href="#5-13-堆喷：Heap-Spray" class="headerlink" title="5.13. 堆喷：Heap Spray"></a>5.13. 堆喷：Heap Spray</h2><p>堆喷并非一种攻击型技术，是一种shellcode定位技术（因为堆分配的地址有较大的随机性），配合别的内存攻击技术如堆溢出、栈溢出进行使用。堆喷技术早期常用于攻击浏览器。将EIP指向堆区的0x0C0C0C0C位置，然后申请大量堆内存，并用包含着slidecode（滑板指令，不影响shellcode的执行，如0x90即<code>nop</code>、0x0C即<code>OR AL 0x0C</code>、0x0D，一般选取0x0C可以避免出现覆盖虚函数指针导致的问题）和shellcode的内存块覆盖这些内存。通常，内存分配会从内存低址向高址分配内存，因此当申请的内存超过200MB（200MB&#x3D;200×1024×1024 &#x3D; 0x0C800000 &gt; 0x0C0C0C0C）后，0x0C0C0C0C将被含有shellcode的内存块覆盖。只要内存片中的slidecode能够命中0x0C0C0C0C的位置，shellcode就能最终得到执行。</p>
+<h3 id="5-13-1-示例代码"><a href="#5-13-1-示例代码" class="headerlink" title="5.13.1. 示例代码"></a>5.13.1. 示例代码</h3><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"> <span class="comment">//生成一个1MB大小充满0x90的数据块，为单个内存块</span></span><br><span class="line"><span class="keyword">var</span> nop = <span class="built_in">unescape</span>(<span class="string">&quot;%u9090%u9090&quot;</span>); </span><br><span class="line"><span class="keyword">while</span>(nop.<span class="property">length</span>&lt;= <span class="number">0x100000</span>/<span class="number">2</span>) &#123;</span><br><span class="line">    nop += nop; </span><br><span class="line">&#125;   </span><br><span class="line"><span class="comment">//在Heap Spray时，内存块相对于shellcode和额外的内存信息来说应该“足够大”，这样nop区域命中0x0C0C0C0C的几率将相对增加</span></span><br><span class="line"><span class="comment">//如果内存片较小，shellcode或额外的内存信息将有可能覆盖0x0C0C0C0C，导致溢出失败</span></span><br><span class="line"><span class="comment">//1MB的内存相对于200字节左右的shellcode，可以让exploit拥有足够的稳定性</span></span><br><span class="line"><span class="comment">//减去shellcode和额外信息所占据的空间，堆块信息（32） 字符串长度（4） 字符串结束符，两个字节的NULL（2）</span></span><br><span class="line">nop = nop.<span class="title function_">substring</span>(<span class="number">0</span>, <span class="number">0x100000</span>/<span class="number">2</span> - <span class="number">32</span>/<span class="number">2</span> - <span class="number">4</span>/<span class="number">2</span> - shellcode.<span class="property">length</span> - <span class="number">2</span>/<span class="number">2</span> );</span><br><span class="line"><span class="keyword">var</span> slide = <span class="keyword">new</span> <span class="title class_">Arrary</span>();         <span class="comment">//申请数组</span></span><br><span class="line"><span class="keyword">for</span> (<span class="keyword">var</span> i = <span class="number">0</span>; i &lt; <span class="number">200</span>; i++) &#123;</span><br><span class="line">    slide[i] = nop + shellcode    <span class="comment">//写入200MB数据</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="6-手机里的缓冲区溢出"><a href="#6-手机里的缓冲区溢出" class="headerlink" title="6. 手机里的缓冲区溢出"></a>6. 手机里的缓冲区溢出</h1><p>暂缓。</p>
+<h1 id="7-其它类型的软件漏洞"><a href="#7-其它类型的软件漏洞" class="headerlink" title="7. 其它类型的软件漏洞"></a>7. 其它类型的软件漏洞</h1><h2 id="7-1-printf函数的格式化串漏洞"><a href="#7-1-printf函数的格式化串漏洞" class="headerlink" title="7.1. printf函数的格式化串漏洞"></a>7.1. printf函数的格式化串漏洞</h2><p>格式化串漏洞产生于数据输出函数中对输出格式解析的缺陷。当变量数量小于格式化字符串中控制符的数量的时候，就会导致读取到栈中更高地址的数据。如果可以控制格式化字符串的内容，就可以实现读取内存数据。结合<code>%n</code>控制符，就可以实现写内存数据。wprintf等printf系列函数均可能存在类似漏洞。</p>
+<h2 id="7-2-逻辑漏洞"><a href="#7-2-逻辑漏洞" class="headerlink" title="7.2. 逻辑漏洞"></a>7.2. 逻辑漏洞</h2><ul>
+<li>访问控制</li>
+<li>协议漏洞</li>
+<li>fakefuzz（多线程竞态条件）</li>
+</ul>
+<h2 id="7-3-SQL注入"><a href="#7-3-SQL注入" class="headerlink" title="7.3. SQL注入"></a>7.3. SQL注入</h2><p>暂缓。</p>
+<h2 id="7-4-其它注入"><a href="#7-4-其它注入" class="headerlink" title="7.4. 其它注入"></a>7.4. 其它注入</h2><h3 id="7-4-1-Cookie注入"><a href="#7-4-1-Cookie注入" class="headerlink" title="7.4.1. Cookie注入"></a>7.4.1. Cookie注入</h3><p>暂缓。</p>
+<h3 id="7-4-2-XPath注入"><a href="#7-4-2-XPath注入" class="headerlink" title="7.4.2. XPath注入"></a>7.4.2. XPath注入</h3><p>暂缓。</p>
+<h2 id="7-5-XSS"><a href="#7-5-XSS" class="headerlink" title="7.5. XSS"></a>7.5. XSS</h2><p>暂缓。</p>
+<h2 id="7-6-路径回溯漏洞"><a href="#7-6-路径回溯漏洞" class="headerlink" title="7.6. 路径回溯漏洞"></a>7.6. 路径回溯漏洞</h2><p>暂缓。</p>
+<h1 id="8-参考资料"><a href="#8-参考资料" class="headerlink" title="8. 参考资料"></a>8. 参考资料</h1><ul>
+<li>《0day安全-软件漏洞分析技术》</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io">凌虚</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/">https://yslingxu.github.io/2026/04/27/漏洞挖掘/漏洞利用原理/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="external nofollow noreferrer" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://yslingxu.github.io" target="_blank">凌虚的博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E/">漏洞</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/">漏洞挖掘</a><a class="post-meta__tags" href="/tags/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8/">漏洞利用</a></div><div class="post-share"><div class="social-share" data-image="/images/avatar.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">ROP</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术，可以用来绕过现代操作系统的各种通用防御。 2. 准备工作2.1. 设置coredump可以防止出现程序在GDB调试环境下的内存地址与实际运行环境下内存地址不同的情况。 12345# 开启coredumpulimit -c unlimitedsudo sh -c &#x27;echo &quot;/tmp/core.%t&quot; &gt; /proc/sys/kernel/core_pattern&#x27;# 调试coredump文件，第一个xxx为可执行文件名，第二个xxx为coredump文件名...</div></div></div></a><a class="pagination-related" href="/2026/04/27/%E4%BC%9A%E8%AE%A1%E5%AD%A6/%E4%BC%9A%E8%AE%A1%E5%AD%A6%E5%9F%BA%E7%A1%80/" title="会计学基础"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">会计学基础</div></div><div class="info-2"><div class="info-item-1">1. 会计学基础1.1. 会计是什么 会计是一种商业语言，是为了记录以及传播商业活动，商业活动的本质是价值交换 会计信息的要素：主体、时间、金额 复式记账：同时记录资金的来源和去向，即借贷记账法  1.2. 会计恒等式一 资产（企业拥有或者控制的，能够以货币计量的，预期能够给企业带来经济利益的资源） &#x3D; 负债 + 所有者权益（企业投资者对净资产的所有权） 资产可以分为流动资产、非流动资产、隐形资产 负债可以分为流动负债、非流动负债、隐形负债  1.3. 会计恒等式二 利润 &#x3D; 收入（与投入资本无关的经济利益） - 费用 收入记录遵循权责发生制（以权利已经形成或者义务已经发生作为确认依据），且要求经济利益很可能流入企业  2. 记账 会计科目：标注大项目和自定义小项目 会计分录：记录借贷数据 会计循环：经济业务 —编审凭证、分录—&gt; 会计凭证 —过账—&gt; 会计账簿 —试算、调整、结账—&gt; 财务报表  3. 财务报表 资产负债表 利润表 现金流量表  4. 资金 所有者投资 实收资本 资本公积   银行筹资 短期借款 长期借款   债券筹资 平利...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">漏洞挖掘方法</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 图灵机停机问题程序存在不可计算性，因此理论上无法彻底消灭软件中存在的缺陷（Bug和漏洞）。 1.2. 白盒测试：源代码审计可利用以下工具进行源代码审计：  Fortify：在编译阶段扫描若干种安全风险 Rough Auditing Tool for Security：用于分析C&#x2F;C++语言的语法树，寻找存在潜在安全问题的函数调用 Bugs Errors And Mistakes：由IBM研究院研发，使用数据流分析的方法分析源代码的所有可执行路径，以检测代码中潜在的bug SLAM：检测驱动中的bug Flaw Finder：用Python语言开发的代码分析工具 Prexis：可以审计多种语言的源代码，审计的漏洞类型超过30种 Coverity：提高软件质量的源代码静态分析工具  1.3. 黑盒测试：FuzzFuzz使用带有攻击性的畸形数据来触发各种类型的漏洞（不能exploit），可使用以下工具：  SPIKE：针对网络协议的模糊测试工具，使用了基于数据块的Fuzz理论 beSTORM：利用了模糊测试技术来实现针对网络协议的安全测试  2. 文件类型...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">ROP</div></div><div class="info-2"><div class="info-item-1">1. 概述1.1. 程序流劫持（Control Flow Hijack）通过程序流劫持（如栈溢出，格式化字符串攻击和堆溢出），攻击者可以控制PC指针从而执行目标代码。 1.2. 系统防御为了应对程序流劫持，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。 1.3. ROP的概念ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术，可以用来绕过现代操作系统的各种通用防御。 2. 准备工作2.1. 设置coredump可以防止出现程序在GDB调试环境下的内存地址与实际运行环境下内存地址不同的情况。 12345# 开启coredumpulimit -c unlimitedsudo sh -c &#x27;echo &quot;/tmp/core.%t&quot; &gt; /proc/sys/kernel/core_pattern&#x27;# 调试coredump文件，第一个xxx为可执行文件名，第二个xxx为coredump文件名...</div></div></div></a><a class="pagination-related" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">内存保护机制与绕过</div></div><div class="info-2"><div class="info-item-1">1. 内存保护机制概述1.1. 漏洞起源冯诺依曼体系未对代码和数据作区分，现代漏洞大多基于这一点，导致用户数据被当作代码来执行。 1.2. 内存保护机制 GS编译技术，在函数返回地址之前加入了Security Cookie，函数返回前首先检测Security Cookie是否被覆盖，对抗栈溢出 SafeSEH，增加了对SEH的安全校验机制，对抗SEH覆盖 DEP（数据执行保护），将数据部分标示为不可执行，阻止栈、堆和数据节中攻击代码的执行 ASLR（加载地址随机），随机化可执行文件和动态链接库文件的加载地址，对抗溢出 SEHOP（SEH覆写保护），将SEH的保护提升到系统级别，对抗SEH溢出 在堆中加入了Heap Cookie、Safe Unlinking等一系列的安全机制，对抗堆溢出  1.3. 内存保护机制的对抗   目的 保护技术    覆盖返回地址 通过GS保护   覆盖SEH链 通过SafeSEH、SEHOP保护   覆盖本地变量 可能被VC编译器经过重新整理和优化   覆盖空闲堆双向链表 通过safe unlinking保护   覆盖堆块头 XP下使用8位的Heade...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">凌虚</div><div class="author-info-description">空谷临风，逸世凌虚</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">29</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">26</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><a id="card-info-btn" target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/yslingxu"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yslingxu" rel="external nofollow noreferrer" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:yslingxu@outlook.com" rel="external nofollow noreferrer" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">给大家拜个早年！新年快乐！</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86"><span class="toc-text">1. 基础知识</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-shellcode"><span class="toc-text">2. shellcode</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-%E7%BC%93%E5%86%B2%E5%8C%BA%E7%9A%84%E7%BB%84%E7%BB%87"><span class="toc-text">2.1. 缓冲区的组织</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-%E5%BC%80%E5%8F%91%E9%80%9A%E7%94%A8shellcode%EF%BC%9A%E8%B7%A8%E5%B9%B3%E5%8F%B0%E3%80%81%E8%B7%A8%E8%AE%A1%E7%AE%97%E6%9C%BA"><span class="toc-text">2.2. 开发通用shellcode：跨平台、跨计算机</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-3-shellcode%E7%BC%96%E7%A0%81%E6%8A%80%E6%9C%AF"><span class="toc-text">2.3. shellcode编码技术</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-1-%E5%8E%9F%E5%9B%A0"><span class="toc-text">2.3.1. 原因</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-2-%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">2.3.2. 解决方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-3-%E9%9B%86%E6%88%90"><span class="toc-text">2.3.3. 集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-4-shellcode%E5%8E%8B%E7%BC%A9"><span class="toc-text">2.4. shellcode压缩</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#3-Metasploit"><span class="toc-text">3. Metasploit</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#3-1-%E6%B5%81%E7%A8%8B"><span class="toc-text">3.1. 流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-2-%E6%A8%A1%E5%9D%97"><span class="toc-text">3.2. 模块</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-3-MSF%E7%9A%84%E6%8F%92%E4%BB%B6%E7%A8%8B%E5%BA%8F"><span class="toc-text">3.3. MSF的插件程序</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-%E5%A0%86%E6%BA%A2%E5%87%BA"><span class="toc-text">4. 堆溢出</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-1-%E5%A0%86%E4%B8%8E%E6%A0%88%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">4.1. 堆与栈的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-2-%E5%A0%86%E7%9A%84%E7%BB%84%E7%BB%87%E6%96%B9%E5%BC%8F"><span class="toc-text">4.2. 堆的组织方式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-1-%E5%A0%86%E5%9D%97%E5%92%8C%E5%A0%86%E8%A1%A8"><span class="toc-text">4.2.1. 堆块和堆表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-2-%E7%A9%BA%E9%97%B2%E5%8F%8C%E5%90%91%E9%93%BE%E8%A1%A8"><span class="toc-text">4.2.2. 空闲双向链表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-3-%E5%BF%AB%E9%80%9F%E5%8D%95%E5%90%91%E9%93%BE%E8%A1%A8"><span class="toc-text">4.2.3. 快速单向链表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-4-%E5%A0%86%E7%BB%84%E7%BB%87%E6%96%B9%E5%BC%8F%E5%9B%BE"><span class="toc-text">4.2.4. 堆组织方式图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-3-%E5%A0%86%E6%93%8D%E4%BD%9C"><span class="toc-text">4.3. 堆操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-1-%E6%99%AE%E9%80%9A%E5%A0%86%E5%9D%97%E5%88%86%E9%85%8D"><span class="toc-text">4.3.1. 普通堆块分配</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-2-%E5%A0%86%E5%9D%97%E9%87%8A%E6%94%BE"><span class="toc-text">4.3.2. 堆块释放</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-3-%E5%A0%86%E5%9D%97%E5%90%88%E5%B9%B6"><span class="toc-text">4.3.3. 堆块合并</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-4-%E5%A0%86%E5%9D%97%E5%88%86%E9%85%8D%E7%AD%96%E7%95%A5"><span class="toc-text">4.3.4. 堆块分配策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-4-%E5%A0%86%E7%9A%84%E8%B0%83%E8%AF%95"><span class="toc-text">4.4. 堆的调试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-5-%E5%A0%86%E5%9D%97%E9%A6%96%E9%83%A8%E7%BB%93%E6%9E%84"><span class="toc-text">4.5. 堆块首部结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-6-%E5%A0%86%E6%93%8D%E4%BD%9C%E6%BA%A2%E5%87%BA"><span class="toc-text">4.6. 堆操作溢出</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-6-1-%E4%B8%80%E4%BA%9B%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">4.6.1. 一些注意事项</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-7-%E5%88%A9%E7%94%A8chunk%E9%87%8D%E8%AE%BE%E5%A4%A7%E5%B0%8F%E6%94%BB%E5%87%BB%E5%A0%86"><span class="toc-text">4.7. 利用chunk重设大小攻击堆</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-8-%E5%88%A9%E7%94%A8Lookaside%E8%A1%A8%E8%BF%9B%E8%A1%8C%E5%A0%86%E6%BA%A2%E5%87%BA"><span class="toc-text">4.8. 利用Lookaside表进行堆溢出</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-%E5%85%B6%E5%AE%83%E5%86%85%E5%AD%98%E6%94%BB%E5%87%BB%E6%8A%80%E6%9C%AF"><span class="toc-text">5. 其它内存攻击技术</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#5-1-SEH"><span class="toc-text">5.1. SEH</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-2-VEH"><span class="toc-text">5.2. VEH</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-3-%E6%94%BB%E5%87%BBTEB%E4%B8%AD%E7%9A%84SEH%E5%A4%B4%E8%8A%82%E7%82%B9"><span class="toc-text">5.3. 攻击TEB中的SEH头节点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-1-%E5%B1%80%E9%99%90%E6%80%A7"><span class="toc-text">5.3.1. 局限性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-4-%E6%94%BB%E5%87%BBUEF"><span class="toc-text">5.4. 攻击UEF</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-5-%E6%94%BB%E5%87%BBPEB%E4%B8%AD%E7%9A%84%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88"><span class="toc-text">5.5. 攻击PEB中的函数指针</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-6-off-by-one"><span class="toc-text">5.6. off by one</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-7-C-%E7%9A%84%E8%99%9A%E5%87%BD%E6%95%B0"><span class="toc-text">5.7. C++的虚函数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-8-bss%E6%BA%A2%E5%87%BA"><span class="toc-text">5.8. bss溢出</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-9-data%E6%BA%A2%E5%87%BA"><span class="toc-text">5.9. data溢出</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-10-%E6%95%B4%E6%95%B0%E6%BA%A2%E5%87%BA"><span class="toc-text">5.10. 整数溢出</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-11-UAF"><span class="toc-text">5.11. UAF</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-12-Double-Free"><span class="toc-text">5.12. Double Free</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-13-%E5%A0%86%E5%96%B7%EF%BC%9AHeap-Spray"><span class="toc-text">5.13. 堆喷：Heap Spray</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-13-1-%E7%A4%BA%E4%BE%8B%E4%BB%A3%E7%A0%81"><span class="toc-text">5.13.1. 示例代码</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-%E6%89%8B%E6%9C%BA%E9%87%8C%E7%9A%84%E7%BC%93%E5%86%B2%E5%8C%BA%E6%BA%A2%E5%87%BA"><span class="toc-text">6. 手机里的缓冲区溢出</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#7-%E5%85%B6%E5%AE%83%E7%B1%BB%E5%9E%8B%E7%9A%84%E8%BD%AF%E4%BB%B6%E6%BC%8F%E6%B4%9E"><span class="toc-text">7. 其它类型的软件漏洞</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#7-1-printf%E5%87%BD%E6%95%B0%E7%9A%84%E6%A0%BC%E5%BC%8F%E5%8C%96%E4%B8%B2%E6%BC%8F%E6%B4%9E"><span class="toc-text">7.1. printf函数的格式化串漏洞</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-2-%E9%80%BB%E8%BE%91%E6%BC%8F%E6%B4%9E"><span class="toc-text">7.2. 逻辑漏洞</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-3-SQL%E6%B3%A8%E5%85%A5"><span class="toc-text">7.3. SQL注入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-4-%E5%85%B6%E5%AE%83%E6%B3%A8%E5%85%A5"><span class="toc-text">7.4. 其它注入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-4-1-Cookie%E6%B3%A8%E5%85%A5"><span class="toc-text">7.4.1. Cookie注入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-4-2-XPath%E6%B3%A8%E5%85%A5"><span class="toc-text">7.4.2. XPath注入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-5-XSS"><span class="toc-text">7.5. XSS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-6-%E8%B7%AF%E5%BE%84%E5%9B%9E%E6%BA%AF%E6%BC%8F%E6%B4%9E"><span class="toc-text">7.6. 路径回溯漏洞</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#8-%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">8. 参考资料</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法">漏洞挖掘方法</a><time datetime="2026-04-28T03:33:10.000Z" title="发表于 2026-04-28 11:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过">内存保护机制与绕过</a><time datetime="2026-04-28T02:33:10.000Z" title="发表于 2026-04-28 10:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP">ROP</a><time datetime="2026-04-28T01:33:10.000Z" title="发表于 2026-04-28 09:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8%E5%8E%9F%E7%90%86/" title="漏洞利用原理">漏洞利用原理</a><time datetime="2026-04-27T14:33:10.000Z" title="发表于 2026-04-27 22:33:10">2026-04-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/27/%E4%BC%9A%E8%AE%A1%E5%AD%A6/%E4%BC%9A%E8%AE%A1%E5%AD%A6%E5%9F%BA%E7%A1%80/" title="会计学基础">会计学基础</a><time datetime="2026-04-27T11:33:10.000Z" title="发表于 2026-04-27 19:33:10">2026-04-27</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 凌虚</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
