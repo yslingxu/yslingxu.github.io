@@ -1,0 +1,181 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>爬虫的一些QA | 凌虚的博客</title><meta name="author" content="凌虚"><meta name="copyright" content="凌虚"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. Chromium相关1.1. 解决Chromium “缺少 Google API 密钥”问题每次打开Chromium，地址栏下方就会提示“缺少Google API密钥，因此Chromium的部分功能将无法使用”。 1.1.1. 解决方法一：屏蔽提示（不需要登录Google）设置环境变量，打开windows的cmd命令提示符，依次输入以下命令： 123setx GOOGLE_API_KEY &amp;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="爬虫的一些QA">
+<meta property="og:url" content="https://yslingxu.github.io/2026/04/28/%E7%88%AC%E8%99%AB/%E7%88%AC%E8%99%AB%E7%9A%84%E4%B8%80%E4%BA%9BQA/index.html">
+<meta property="og:site_name" content="凌虚的博客">
+<meta property="og:description" content="1. Chromium相关1.1. 解决Chromium “缺少 Google API 密钥”问题每次打开Chromium，地址栏下方就会提示“缺少Google API密钥，因此Chromium的部分功能将无法使用”。 1.1.1. 解决方法一：屏蔽提示（不需要登录Google）设置环境变量，打开windows的cmd命令提示符，依次输入以下命令： 123setx GOOGLE_API_KEY &amp;">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yslingxu.github.io/images/avatar.png">
+<meta property="article:published_time" content="2026-04-28T04:58:10.000Z">
+<meta property="article:modified_time" content="2026-04-28T06:03:21.000Z">
+<meta property="article:author" content="凌虚">
+<meta property="article:tag" content="爬虫">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yslingxu.github.io/images/avatar.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "爬虫的一些QA",
+  "url": "https://yslingxu.github.io/2026/04/28/%E7%88%AC%E8%99%AB/%E7%88%AC%E8%99%AB%E7%9A%84%E4%B8%80%E4%BA%9BQA/",
+  "image": "https://yslingxu.github.io/images/avatar.png",
+  "datePublished": "2026-04-28T04:58:10.000Z",
+  "dateModified": "2026-04-28T06:03:21.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "凌虚",
+      "url": "https://yslingxu.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://yslingxu.github.io/2026/04/28/%E7%88%AC%E8%99%AB/%E7%88%AC%E8%99%AB%E7%9A%84%E4%B8%80%E4%BA%9BQA/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '爬虫的一些QA',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">31</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">28</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">8</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">凌虚的博客</span></a><a class="nav-page-title" href="/"><span class="site-name">爬虫的一些QA</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">爬虫的一些QA</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-28T04:58:10.000Z" title="发表于 2026-04-28 12:58:10">2026-04-28</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-28T06:03:21.000Z" title="更新于 2026-04-28 14:03:21">2026-04-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E7%88%AC%E8%99%AB/">爬虫</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="1-Chromium相关"><a href="#1-Chromium相关" class="headerlink" title="1. Chromium相关"></a>1. Chromium相关</h1><h2 id="1-1-解决Chromium-“缺少-Google-API-密钥”问题"><a href="#1-1-解决Chromium-“缺少-Google-API-密钥”问题" class="headerlink" title="1.1. 解决Chromium “缺少 Google API 密钥”问题"></a>1.1. 解决Chromium “缺少 Google API 密钥”问题</h2><p>每次打开Chromium，地址栏下方就会提示“缺少Google API密钥，因此Chromium的部分功能将无法使用”。</p>
+<h3 id="1-1-1-解决方法一：屏蔽提示（不需要登录Google）"><a href="#1-1-1-解决方法一：屏蔽提示（不需要登录Google）" class="headerlink" title="1.1.1. 解决方法一：屏蔽提示（不需要登录Google）"></a>1.1.1. 解决方法一：屏蔽提示（不需要登录Google）</h3><p>设置环境变量，打开windows的cmd命令提示符，依次输入以下命令：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">setx GOOGLE_API_KEY &quot;no&quot;</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_ID &quot;no&quot;</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_SECRET &quot;no&quot;</span><br></pre></td></tr></table></figure>
+<p>可能需要重启电脑。</p>
+<h3 id="1-1-2-解决方法二：使用公开KEY（登录公开Google）"><a href="#1-1-2-解决方法二：使用公开KEY（登录公开Google）" class="headerlink" title="1.1.2. 解决方法二：使用公开KEY（登录公开Google）"></a>1.1.2. 解决方法二：使用公开KEY（登录公开Google）</h3><p>cmd 命令提示符，依次输入以下命令：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">setx GOOGLE_API_KEY AIzaSyDCNWofwOkYgeS3aBnd901sIJqSS4p3nKc</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_ID <span class="number">752805503192</span>-gigd4quq46757vjupq4rv5oga3sougnp.apps.googleusercontent.com</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_SECRET bEbljK3NYvuRBe-zn7UyS4Zy</span><br></pre></td></tr></table></figure>
+<p>可能需要重启电脑。</p>
+<h3 id="1-1-3-解决方法三：使用自己的KEY（登录自己的Google）"><a href="#1-1-3-解决方法三：使用自己的KEY（登录自己的Google）" class="headerlink" title="1.1.3. 解决方法三：使用自己的KEY（登录自己的Google）"></a>1.1.3. 解决方法三：使用自己的KEY（登录自己的Google）</h3><ul>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://cloud.google.com/console">https://cloud.google.com/console</a></li>
+<li>创建或选择已有项目 → 左侧边栏 API和服务 → 凭证</li>
+<li>创建凭证(类型为 “API 密钥”,名称随意, 不使用密钥限制,记住生成的key)</li>
+<li>再创建一个凭证(类型为 “OAuth 客户端 ID”, 名称随意, 应用类型选择 “其他”, 记住生成的 “客户端 ID” 和 “客户端密钥”)</li>
+<li>格式填写自己的 API Key<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">setx GOOGLE_API_KEY 生成的API密钥</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_ID 生成的客户端ID</span><br><span class="line">setx GOOGLE_DEFAULT_CLIENT_SECRET 生成的客户端密钥</span><br></pre></td></tr></table></figure>
+可能需要重启电脑。</li>
+</ul>
+<h1 id="2-Puppeteer相关"><a href="#2-Puppeteer相关" class="headerlink" title="2. Puppeteer相关"></a>2. Puppeteer相关</h1><h2 id="2-1-centos安装运行puppeteer遇到的报错及解决方案"><a href="#2-1-centos安装运行puppeteer遇到的报错及解决方案" class="headerlink" title="2.1. centos安装运行puppeteer遇到的报错及解决方案"></a>2.1. centos安装运行puppeteer遇到的报错及解决方案</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">报错:/home/work/node_modules/puppeteer/.local-chromium/linux-856583/chrome-linux/chrome: error <span class="keyword">while</span> loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory</span><br><span class="line">解决:yum install atk</span><br><span class="line"></span><br><span class="line">报错:/home/work/node_modules/puppeteer/.local-chromium/linux-856583/chrome-linux/chrome: error <span class="keyword">while</span> loading shared libraries: libatk-bridge-2.0.so.0: cannot open shared object file: No such file or directory</span><br><span class="line">解决:yum install at-spi2-atk</span><br><span class="line"></span><br><span class="line">报错:/home/work/node_modules/puppeteer/.local-chromium/linux-856583/chrome-linux/chrome: error <span class="keyword">while</span> loading shared libraries: libxkbcommon.so.0: cannot open shared object file: No such file or directory</span><br><span class="line">解决:yum install libxkbcommon-x11-devel</span><br><span class="line"></span><br><span class="line">报错:/home/work/node_modules/puppeteer/.local-chromium/linux-856583/chrome-linux/chrome: error <span class="keyword">while</span> loading shared libraries: libXcomposite.so.1: cannot open shared object file: No such file or directory</span><br><span class="line">解决:yum install libXcomposite</span><br><span class="line"></span><br><span class="line">报错:/home/work/node_modules/puppeteer/.local-chromium/linux-856583/chrome-linux/chrome: error <span class="keyword">while</span> loading shared libraries: libgtk-3.so.0: cannot open shared object file: No such file or directory</span><br><span class="line">解决:yum install gtk3</span><br><span class="line"></span><br><span class="line">yum install atk at-spi2-atk libxkbcommon-x11-devel libXcomposite gtk3 -y</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-2-中文显示方块乱码"><a href="#2-2-中文显示方块乱码" class="headerlink" title="2.2. 中文显示方块乱码"></a>2.2. 中文显示方块乱码</h2><p>Linux操作系统对中文的支持问题。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 查找文泉驿中文包</span></span><br><span class="line"><span class="built_in">sudo</span> yum search wqy</span><br><span class="line">Loaded plugins: fastestmirror, langpacks</span><br><span class="line">Repodata is over 2 weeks old. Install yum-cron? Or run: yum makecache fast</span><br><span class="line">Determining fastest mirrors</span><br><span class="line">======================================================== N/S matched: wqy =========================================================</span><br><span class="line">wqy-microhei-fonts.noarch : Compact Chinese fonts derived from Droid</span><br><span class="line">wqy-unibit-fonts.noarch : WenQuanYi Unibit Bitmap Font</span><br><span class="line">wqy-zenhei-fonts.noarch : WenQuanYi Zen Hei CJK Font</span><br><span class="line"><span class="comment"># 安装文泉驿中文包</span></span><br><span class="line">yum install wqy-microhei-fonts.noarch -y</span><br><span class="line">yum install wqy-unibit-fonts.noarch -y</span><br><span class="line">yum install wqy-zenhei-fonts.noarch -y</span><br></pre></td></tr></table></figure>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io">凌虚</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io/2026/04/28/%E7%88%AC%E8%99%AB/%E7%88%AC%E8%99%AB%E7%9A%84%E4%B8%80%E4%BA%9BQA/">https://yslingxu.github.io/2026/04/28/爬虫/爬虫的一些QA/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="external nofollow noreferrer" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://yslingxu.github.io" target="_blank">凌虚的博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E7%88%AC%E8%99%AB/">爬虫</a></div><div class="post-share"><div class="social-share" data-image="/images/avatar.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/04/28/%E7%88%AC%E8%99%AB/%E5%8F%8D%E7%88%AC%E4%B8%8E%E5%AF%B9%E6%8A%97/" title="反爬与对抗"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">反爬与对抗</div></div><div class="info-2"><div class="info-item-1">1. 针对chromedriver的检测与绕过1.1. UserAgent检测无头模式下的UA会带有HeadlessChrome关键字，例如Mozilla&#x2F;5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit&#x2F;537.36 (KHTML, like Gecko) HeadlessChrome&#x2F;70.0.3521.2 Safari&#x2F;537.361，因此可以检查UA中的关键字。 1234if (/HeadlessChrome/.test(navigator.userAgent)) &#123;  // headless...&#125;//修改UserAgent即可绕过  1.2. Webdriver检测无头模式下navigator.webdriver为true，因此可以进行如下检测。 12345678// Webdriver Testif (navigator.webdriver) &#123;  // headless...&#125;//重新设置该属性即可绕过Object.definePr...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/04/28/%E7%88%AC%E8%99%AB/%E5%8F%8D%E7%88%AC%E4%B8%8E%E5%AF%B9%E6%8A%97/" title="反爬与对抗"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-28</div><div class="info-item-2">反爬与对抗</div></div><div class="info-2"><div class="info-item-1">1. 针对chromedriver的检测与绕过1.1. UserAgent检测无头模式下的UA会带有HeadlessChrome关键字，例如Mozilla&#x2F;5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit&#x2F;537.36 (KHTML, like Gecko) HeadlessChrome&#x2F;70.0.3521.2 Safari&#x2F;537.361，因此可以检查UA中的关键字。 1234if (/HeadlessChrome/.test(navigator.userAgent)) &#123;  // headless...&#125;//修改UserAgent即可绕过  1.2. Webdriver检测无头模式下navigator.webdriver为true，因此可以进行如下检测。 12345678// Webdriver Testif (navigator.webdriver) &#123;  // headless...&#125;//重新设置该属性即可绕过Object.definePr...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">凌虚</div><div class="author-info-description">空谷临风，逸世凌虚</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">31</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">28</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">8</div></a></div><a id="card-info-btn" target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/yslingxu"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yslingxu" rel="external nofollow noreferrer" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:yslingxu@outlook.com" rel="external nofollow noreferrer" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">给大家拜个早年！新年快乐！</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-Chromium%E7%9B%B8%E5%85%B3"><span class="toc-text">1. Chromium相关</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-1-%E8%A7%A3%E5%86%B3Chromium-%E2%80%9C%E7%BC%BA%E5%B0%91-Google-API-%E5%AF%86%E9%92%A5%E2%80%9D%E9%97%AE%E9%A2%98"><span class="toc-text">1.1. 解决Chromium “缺少 Google API 密钥”问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-1-%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95%E4%B8%80%EF%BC%9A%E5%B1%8F%E8%94%BD%E6%8F%90%E7%A4%BA%EF%BC%88%E4%B8%8D%E9%9C%80%E8%A6%81%E7%99%BB%E5%BD%95Google%EF%BC%89"><span class="toc-text">1.1.1. 解决方法一：屏蔽提示（不需要登录Google）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-2-%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95%E4%BA%8C%EF%BC%9A%E4%BD%BF%E7%94%A8%E5%85%AC%E5%BC%80KEY%EF%BC%88%E7%99%BB%E5%BD%95%E5%85%AC%E5%BC%80Google%EF%BC%89"><span class="toc-text">1.1.2. 解决方法二：使用公开KEY（登录公开Google）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-3-%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95%E4%B8%89%EF%BC%9A%E4%BD%BF%E7%94%A8%E8%87%AA%E5%B7%B1%E7%9A%84KEY%EF%BC%88%E7%99%BB%E5%BD%95%E8%87%AA%E5%B7%B1%E7%9A%84Google%EF%BC%89"><span class="toc-text">1.1.3. 解决方法三：使用自己的KEY（登录自己的Google）</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-Puppeteer%E7%9B%B8%E5%85%B3"><span class="toc-text">2. Puppeteer相关</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-centos%E5%AE%89%E8%A3%85%E8%BF%90%E8%A1%8Cpuppeteer%E9%81%87%E5%88%B0%E7%9A%84%E6%8A%A5%E9%94%99%E5%8F%8A%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">2.1. centos安装运行puppeteer遇到的报错及解决方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-%E4%B8%AD%E6%96%87%E6%98%BE%E7%A4%BA%E6%96%B9%E5%9D%97%E4%B9%B1%E7%A0%81"><span class="toc-text">2.2. 中文显示方块乱码</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E7%88%AC%E8%99%AB/%E7%88%AC%E8%99%AB%E7%9A%84%E4%B8%80%E4%BA%9BQA/" title="爬虫的一些QA">爬虫的一些QA</a><time datetime="2026-04-28T04:58:10.000Z" title="发表于 2026-04-28 12:58:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E7%88%AC%E8%99%AB/%E5%8F%8D%E7%88%AC%E4%B8%8E%E5%AF%B9%E6%8A%97/" title="反爬与对抗">反爬与对抗</a><time datetime="2026-04-28T04:38:10.000Z" title="发表于 2026-04-28 12:38:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98%E6%96%B9%E6%B3%95/" title="漏洞挖掘方法">漏洞挖掘方法</a><time datetime="2026-04-28T03:33:10.000Z" title="发表于 2026-04-28 11:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/%E5%86%85%E5%AD%98%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6%E4%B8%8E%E7%BB%95%E8%BF%87/" title="内存保护机制与绕过">内存保护机制与绕过</a><time datetime="2026-04-28T02:33:10.000Z" title="发表于 2026-04-28 10:33:10">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/04/28/%E6%BC%8F%E6%B4%9E%E6%8C%96%E6%8E%98/ROP/" title="ROP">ROP</a><time datetime="2026-04-28T01:33:10.000Z" title="发表于 2026-04-28 09:33:10">2026-04-28</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 凌虚</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
