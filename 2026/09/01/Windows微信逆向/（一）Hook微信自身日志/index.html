@@ -1,0 +1,205 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Windows微信逆向（一）Hook微信自身日志 | 凌虚的博客</title><meta name="author" content="凌虚"><meta name="copyright" content="凌虚"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 前言近期分析了一下64位的PC微信，对其中的一些内容做一些分享。本期分享内容：Hook微信自身日志。 本次分析使用版本：3.9.12.51。 2. 逆向分析众所周知，PC微信的主要业务功能均实现于WechatWin.dll，使用IDA分析。 一般日志都会存在格式化字符串，比如%s、{}等，直接在IDA中搜索。 随便选择一个看着很像（带有一些微信业务属性的，比如消息、图片等）的，追踪一下。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Windows微信逆向（一）Hook微信自身日志">
+<meta property="og:url" content="https://yslingxu.github.io/2026/09/01/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/%EF%BC%88%E4%B8%80%EF%BC%89Hook%E5%BE%AE%E4%BF%A1%E8%87%AA%E8%BA%AB%E6%97%A5%E5%BF%97/index.html">
+<meta property="og:site_name" content="凌虚的博客">
+<meta property="og:description" content="1. 前言近期分析了一下64位的PC微信，对其中的一些内容做一些分享。本期分享内容：Hook微信自身日志。 本次分析使用版本：3.9.12.51。 2. 逆向分析众所周知，PC微信的主要业务功能均实现于WechatWin.dll，使用IDA分析。 一般日志都会存在格式化字符串，比如%s、{}等，直接在IDA中搜索。 随便选择一个看着很像（带有一些微信业务属性的，比如消息、图片等）的，追踪一下。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yslingxu.github.io/images/avatar.png">
+<meta property="article:published_time" content="2026-09-01T03:34:10.000Z">
+<meta property="article:modified_time" content="2026-09-01T04:18:57.162Z">
+<meta property="article:author" content="凌虚">
+<meta property="article:tag" content="微信逆向">
+<meta property="article:tag" content="逆向">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yslingxu.github.io/images/avatar.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Windows微信逆向（一）Hook微信自身日志",
+  "url": "https://yslingxu.github.io/2026/09/01/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/%EF%BC%88%E4%B8%80%EF%BC%89Hook%E5%BE%AE%E4%BF%A1%E8%87%AA%E8%BA%AB%E6%97%A5%E5%BF%97/",
+  "image": "https://yslingxu.github.io/images/avatar.png",
+  "datePublished": "2026-09-01T03:34:10.000Z",
+  "dateModified": "2026-09-01T04:18:57.162Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "凌虚",
+      "url": "https://yslingxu.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://yslingxu.github.io/2026/09/01/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/%EF%BC%88%E4%B8%80%EF%BC%89Hook%E5%BE%AE%E4%BF%A1%E8%87%AA%E8%BA%AB%E6%97%A5%E5%BF%97/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Windows微信逆向（一）Hook微信自身日志',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">36</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">32</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">凌虚的博客</span></a><a class="nav-page-title" href="/"><span class="site-name">Windows微信逆向（一）Hook微信自身日志</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Windows微信逆向（一）Hook微信自身日志</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-01T03:34:10.000Z" title="发表于 2026-09-01 11:34:10">2026-09-01</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-01T04:18:57.162Z" title="更新于 2026-09-01 12:18:57">2026-09-01</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/">Windows微信逆向</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="1-前言"><a href="#1-前言" class="headerlink" title="1. 前言"></a>1. 前言</h1><p>近期分析了一下64位的PC微信，对其中的一些内容做一些分享。本期分享内容：Hook微信自身日志。</p>
+<p>本次分析使用版本：3.9.12.51。</p>
+<h1 id="2-逆向分析"><a href="#2-逆向分析" class="headerlink" title="2. 逆向分析"></a>2. 逆向分析</h1><p>众所周知，PC微信的主要业务功能均实现于WechatWin.dll，使用IDA分析。</p>
+<p>一般日志都会存在格式化字符串，比如%s、{}等，直接在IDA中搜索。</p>
+<p>随便选择一个看着很像（带有一些微信业务属性的，比如消息、图片等）的，追踪一下。</p>
+<p><img src="/assets/images/image-37.png" alt="alt text"></p>
+<p>定位到函数sub_182627590，进去看看。</p>
+<p><img src="/assets/images/image-38.png" alt="alt text"></p>
+<p>函数内发现代码获取了时间和线程ID并格式化，基本可以确定这里就是日志函数了。并发现代码循环处理字符串后在尾部添加结束符\x00。</p>
+<p><img src="/assets/images/image-39.png" alt="alt text"></p>
+<p>将Hook点选择在添加结束符\x00之后，即0x18262780F处。这时候字符串已经组装完毕。</p>
+<p><img src="/assets/images/image-40.png" alt="alt text"></p>
+<p>调试发现在0x18262780F处，rdx指向字符串。</p>
+<p><img src="/assets/images/image-41.png" alt="alt text"></p>
+<h1 id="3-Hook"><a href="#3-Hook" class="headerlink" title="3. Hook"></a>3. Hook</h1><p>64位的Hook和32位的有点区别，32位一般在Hook点直接jmp XXXXXXXX（立即数地址）或者call XXXXXXXX（立即数地址）即可，但是64位不支持直接jmp&#x2F;call立即数地址，所以这里采用mov rax,XXXXXXXXXXXXXXXX（立即数地址），然后jmp rax的方式来Hook。由于这种方式会改写rax的值，所以在这之前还得保存一下rax的值，并在跳转后恢复，防止rax的值丢失。</p>
+<p>梳理一下Hook流程：</p>
+<ol>
+<li>保存rax</li>
+<li>mov rax并jmp rax，就跳转到我们自己的Hook代码处</li>
+<li>恢复rax</li>
+<li>保存寄存器环境，由于64位没有pushad指令，只能手动保存</li>
+<li>调用我们的功能代码</li>
+<li>恢复寄存器环境，由于64位没有popad指令，只能手动恢复</li>
+<li>执行因为Hook操作而被覆盖的原始代码</li>
+<li>再次保存rax</li>
+<li>mov eax并jmp eax，返回到本来的功能代码处</li>
+<li>恢复rax，随后即可正常执行</li>
+</ol>
+<h1 id="4-先手动Hook"><a href="#4-先手动Hook" class="headerlink" title="4. 先手动Hook"></a>4. 先手动Hook</h1><h2 id="4-1-Hook点"><a href="#4-1-Hook点" class="headerlink" title="4.1. Hook点"></a>4.1. Hook点</h2><p><img src="/assets/images/image-42.png" alt="alt text"></p>
+<h2 id="4-2-Hook代码"><a href="#4-2-Hook代码" class="headerlink" title="4.2. Hook代码"></a>4.2. Hook代码</h2><p><img src="/assets/images/image-43.png" alt="alt text"></p>
+<h1 id="5-编写代码自动Hook"><a href="#5-编写代码自动Hook" class="headerlink" title="5. 编写代码自动Hook"></a>5. 编写代码自动Hook</h1><h2 id="5-1-定义偏移地址"><a href="#5-1-定义偏移地址" class="headerlink" title="5.1. 定义偏移地址"></a>5.1. 定义偏移地址</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 这里wxbase为wechatwin.dll的基地址</span></span><br><span class="line"><span class="type">uint64_t</span> hookaddr_wxlog = <span class="number">0x18262780F</span> - <span class="number">0x180000000</span> + wxbase;</span><br><span class="line"><span class="type">uint64_t</span> retaddr_wxlog = <span class="number">0x18262781C</span> - <span class="number">0x180000000</span> + wxbase;</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-2-编写功能函数"><a href="#5-2-编写功能函数" class="headerlink" title="5.2. 编写功能函数"></a>5.2. 编写功能函数</h2><p>这里rdx就是字符串指针，可以根据情况编写功能函数，比如输出到文件等。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">hookdeal_wxlog</span><span class="params">(<span class="type">uint64_t</span> rdx)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">&#125; </span><br></pre></td></tr></table></figure>
+
+<h2 id="5-3-编写Hook功能代码"><a href="#5-3-编写Hook功能代码" class="headerlink" title="5.3. 编写Hook功能代码"></a>5.3. 编写Hook功能代码</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 申请内存空间</span></span><br><span class="line">LPVOID memory = <span class="built_in">VirtualAlloc</span>(<span class="literal">NULL</span>, <span class="number">1000</span>, MEM_COMMIT, PAGE_EXECUTE_READWRITE);</span><br><span class="line"><span class="comment">// pop rax（跳转到Hook代码后，恢复rax）</span></span><br><span class="line"><span class="comment">// pushaq + pushfq（保存寄存器环境）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), memory, <span class="string">&quot;\x58\x54\x50\x53\x51\x52\x55\x56\x57\x41\x50\x41\x51\x41\x52\x41\x53\x41\x54\x41\x55\x41\x56\x41\x57\x9C&quot;</span>, <span class="number">26</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// mov rcx,rdx（参数）</span></span><br><span class="line"><span class="comment">// mov rax（给rax赋值地址）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span>), <span class="string">&quot;\x48\x89\xD1\x48\xB8&quot;</span>, <span class="number">5</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 地址</span></span><br><span class="line"><span class="built_in">void</span> (*ptr)(<span class="type">uint64_t</span>) = hookdeal_wxlog;</span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span>), &amp;ptr, <span class="number">8</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// push rbx（传参但是仍然分配栈）</span></span><br><span class="line"><span class="comment">// call rax（调用hookdeal函数）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span>), <span class="string">&quot;\x53\xFF\xD0&quot;</span>, <span class="number">3</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// pop rbx（恢复栈）</span></span><br><span class="line"><span class="comment">// popfq + popaq（恢复寄存器环境）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span> + <span class="number">3</span>), <span class="string">&quot;\x5B\x9D\x41\x5F\x41\x5E\x41\x5D\x41\x5C\x41\x5B\x41\x5A\x41\x59\x41\x58\x5F\x5E\x5D\x5A\x59\x5B\x58\x5C&quot;</span>, <span class="number">26</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 执行旧的被覆盖的代码</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span> + <span class="number">3</span> + <span class="number">26</span>), <span class="string">&quot;\x44\x89\x75\x80\x0F\x57\xC0\x0F\x11\x85\xC0\x10\x00\x00&quot;</span>, <span class="number">14</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// push rax（保存rax）</span></span><br><span class="line"><span class="comment">// mov rax（给rax赋值地址）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span> + <span class="number">3</span> + <span class="number">26</span> + <span class="number">14</span>), <span class="string">&quot;\x50\x48\xB8&quot;</span>, <span class="number">3</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 地址</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span> + <span class="number">3</span> + <span class="number">26</span> + <span class="number">14</span> + <span class="number">3</span>), &amp;retaddr_wxlog, <span class="number">8</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// jmp rax（跳转回原代码）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)((<span class="type">uint64_t</span>)memory + <span class="number">26</span> + <span class="number">5</span> + <span class="number">8</span> + <span class="number">3</span> + <span class="number">26</span> + <span class="number">14</span> + <span class="number">3</span> + <span class="number">8</span>), <span class="string">&quot;\xFF\xE0&quot;</span>, <span class="number">2</span>, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-4-Hook原始代码"><a href="#5-4-Hook原始代码" class="headerlink" title="5.4. Hook原始代码"></a>5.4. Hook原始代码</h2><p>需要占用14字节的空间。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// push rax（保存rax）</span></span><br><span class="line"><span class="comment">// mov rax（给rax赋值地址）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)hookaddr_wxlog, <span class="string">&quot;\x50\x48\xB8&quot;</span>, <span class="number">3</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 地址</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)(hookaddr_wxlog + <span class="number">3</span>), &amp;memory, <span class="number">8</span>, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// jmp rax（跳转到Hook代码）pop rax（从Hook代码返回后恢复rax）</span></span><br><span class="line"><span class="built_in">WriteProcessMemory</span>(<span class="built_in">GetCurrentProcess</span>(), (LPVOID)(hookaddr_wxlog + <span class="number">3</span> + <span class="number">8</span>), <span class="string">&quot;\xFF\xE0\x58&quot;</span>, <span class="number">3</span>, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+
+<h1 id="6-最终效果"><a href="#6-最终效果" class="headerlink" title="6. 最终效果"></a>6. 最终效果</h1><p>获取到微信日志。</p>
+<p><img src="/assets/images/image-44.png" alt="alt text"></p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io">凌虚</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://yslingxu.github.io/2026/09/01/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/%EF%BC%88%E4%B8%80%EF%BC%89Hook%E5%BE%AE%E4%BF%A1%E8%87%AA%E8%BA%AB%E6%97%A5%E5%BF%97/">https://yslingxu.github.io/2026/09/01/Windows微信逆向/（一）Hook微信自身日志/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="external nofollow noreferrer" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://yslingxu.github.io" target="_blank">凌虚的博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/">微信逆向</a><a class="post-meta__tags" href="/tags/%E9%80%86%E5%90%91/">逆向</a></div><div class="post-share"><div class="social-share" data-image="/images/avatar.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/07/19/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%887%EF%BC%89%E5%BC%80%E6%94%BE%E7%BB%8F%E6%B5%8E%E7%9A%84%E5%AE%8F%E8%A7%82%E7%BB%8F%E6%B5%8E%E5%AD%A6/" title="经济学原理（7）开放经济的宏观经济学"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">经济学原理（7）开放经济的宏观经济学</div></div><div class="info-2"><div class="info-item-1">1. 开放经济的基本概念1.1. 物品和服务的流动 进出口：国家对外购买或者销售物品及服务 净出口：出口 - 进口 贸易盈余（顺差）：净出口 &gt; 0 贸易赤字（逆差）：净出口 &lt; 0  1.2. 金融资源的流动 资本净流出：本国人购买外国资产 - 外国人购买本国资产，这种资产可以是直接投资或者有价证券 资本净流出 &#x3D; 净出口  1.3. 储蓄和投资根据GDP公式的变形，储蓄 &#x3D; 国内投资 + 资本净流出 1.4. 美国的贸易赤字 不平衡的财政政策【政府预算赤字的增加（如减税、国防支出增加等）导致】：在储蓄减少作为既定事实时，外部投资可以刺激经济 投资高涨【科技发展等导致的外部投资高涨】：如果投资带来了好的收益，则对整体经济有好处 经济衰退【经济衰退导致投资降低，政府为了刺激经济而扩大预算赤字】  总体来说，贸易赤字并不算一个问题，但是贸易赤字有时候会是其他经济问题的征兆。 2. 汇率2.1. 真实汇率与名义汇率 名义汇率：银行提供的汇兑服务的汇率 真实汇率：双方市场同一物品的价格比值  2.2. 汇率决定理论购买力平价理论：汇率由两国的物价水平比率...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/images/avatar.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">凌虚</div><div class="author-info-description">空谷临风，逸世凌虚</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">36</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">32</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div><a id="card-info-btn" target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/yslingxu"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yslingxu" rel="external nofollow noreferrer" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:yslingxu@outlook.com" rel="external nofollow noreferrer" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">给大家拜个早年！新年快乐！</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-%E5%89%8D%E8%A8%80"><span class="toc-text">1. 前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-%E9%80%86%E5%90%91%E5%88%86%E6%9E%90"><span class="toc-text">2. 逆向分析</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#3-Hook"><span class="toc-text">3. Hook</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-%E5%85%88%E6%89%8B%E5%8A%A8Hook"><span class="toc-text">4. 先手动Hook</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-1-Hook%E7%82%B9"><span class="toc-text">4.1. Hook点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-2-Hook%E4%BB%A3%E7%A0%81"><span class="toc-text">4.2. Hook代码</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-%E7%BC%96%E5%86%99%E4%BB%A3%E7%A0%81%E8%87%AA%E5%8A%A8Hook"><span class="toc-text">5. 编写代码自动Hook</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#5-1-%E5%AE%9A%E4%B9%89%E5%81%8F%E7%A7%BB%E5%9C%B0%E5%9D%80"><span class="toc-text">5.1. 定义偏移地址</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-2-%E7%BC%96%E5%86%99%E5%8A%9F%E8%83%BD%E5%87%BD%E6%95%B0"><span class="toc-text">5.2. 编写功能函数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-3-%E7%BC%96%E5%86%99Hook%E5%8A%9F%E8%83%BD%E4%BB%A3%E7%A0%81"><span class="toc-text">5.3. 编写Hook功能代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-4-Hook%E5%8E%9F%E5%A7%8B%E4%BB%A3%E7%A0%81"><span class="toc-text">5.4. Hook原始代码</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-%E6%9C%80%E7%BB%88%E6%95%88%E6%9E%9C"><span class="toc-text">6. 最终效果</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/01/Windows%E5%BE%AE%E4%BF%A1%E9%80%86%E5%90%91/%EF%BC%88%E4%B8%80%EF%BC%89Hook%E5%BE%AE%E4%BF%A1%E8%87%AA%E8%BA%AB%E6%97%A5%E5%BF%97/" title="Windows微信逆向（一）Hook微信自身日志">Windows微信逆向（一）Hook微信自身日志</a><time datetime="2026-09-01T03:34:10.000Z" title="发表于 2026-09-01 11:34:10">2026-09-01</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/07/19/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%887%EF%BC%89%E5%BC%80%E6%94%BE%E7%BB%8F%E6%B5%8E%E7%9A%84%E5%AE%8F%E8%A7%82%E7%BB%8F%E6%B5%8E%E5%AD%A6/" title="经济学原理（7）开放经济的宏观经济学">经济学原理（7）开放经济的宏观经济学</a><time datetime="2026-07-19T08:43:10.000Z" title="发表于 2026-07-19 16:43:10">2026-07-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/05/19/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%886%EF%BC%89%E5%AE%8F%E8%A7%82%E7%BB%8F%E6%B5%8E%E5%AD%A6%E7%9A%84%E6%95%B0%E6%8D%AE/" title="经济学原理（6）宏观经济学的数据">经济学原理（6）宏观经济学的数据</a><time datetime="2026-05-19T08:43:10.000Z" title="发表于 2026-05-19 16:43:10">2026-05-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/05/09/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%885%EF%BC%89%E5%BE%AE%E8%A7%82%E7%BB%8F%E6%B5%8E%E5%AD%A6%E6%B7%B1%E5%85%A5%E8%AE%BA%E9%A2%98/" title="经济学原理（5）微观经济学深入论题">经济学原理（5）微观经济学深入论题</a><time datetime="2026-05-09T08:43:10.000Z" title="发表于 2026-05-09 16:43:10">2026-05-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/05/07/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86/%E7%BB%8F%E6%B5%8E%E5%AD%A6%E5%8E%9F%E7%90%86%EF%BC%884%EF%BC%89%E5%8A%B3%E5%8A%A8%E5%8A%9B%E5%B8%82%E5%9C%BA/" title="经济学原理（4）劳动力市场">经济学原理（4）劳动力市场</a><time datetime="2026-05-07T08:43:10.000Z" title="发表于 2026-05-07 16:43:10">2026-05-07</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 凌虚</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
